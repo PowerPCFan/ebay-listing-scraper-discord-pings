@@ -8,17 +8,30 @@ import modules.discord as discord
 from modules import global_vars
 from modules.config_tools import reload_config
 from modules.logger import logger
+from typing import Callable
 
 
 def command_listener() -> None:
-    prefix = ":"
+    def _reload_config() -> None:
+        logger.info("Reloading configuration...")
+        global_vars.config = reload_config()
+        logger.info("Configuration reloaded!")
+        print_config_summary()
+
+    commands: dict[str, Callable[..., None]] = {
+        "reload": _reload_config
+    }
+    commands = {(":" + k): v for k, v in commands.items()}
 
     for line in sys.stdin:
-        if line.strip() == prefix + "reload":
-            logger.info("Reloading configuration...")
-            global_vars.config = reload_config()
-            logger.info("Configuration reloaded!")
-            print_config_summary()
+        stripped = line.strip()
+        for command, function in commands.items():
+            if stripped == command:
+                function()
+                break
+            elif stripped.startswith(command + " "):
+                function(*stripped[(len(command) + 1):].split())
+                break
 
 
 def print_config_summary() -> None:
