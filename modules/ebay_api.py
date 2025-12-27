@@ -21,8 +21,8 @@ else:
     datetime = None
 
 
-_token_cache = None
-_token_expires_at = 0
+_token_cache: str | None = None
+_token_expires_at: int = 0
 
 api_url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
 
@@ -31,8 +31,12 @@ def _get_response_json_filename() -> Path:
     assert datetime is not None
 
     directory = Path(__file__).parent.parent / "responses"
+    path = directory / f"response-{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.json"
 
-    return directory / f"response-{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.json"
+    directory.mkdir(exist_ok=True, parents=True)
+    path.touch(exist_ok=True)
+
+    return path
 
 
 class EbayItem:

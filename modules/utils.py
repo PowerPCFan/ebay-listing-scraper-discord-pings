@@ -49,6 +49,19 @@ def matches_blocklist_override(
     return False
 
 
+def is_seller_blocked(seller_username: str | None) -> bool:
+    if not config.seller_blocklist or not seller_username:
+        return False
+
+    seller_lower = seller_username.lower().strip()
+
+    for blocked_seller in config.seller_blocklist:
+        if matches_pattern(seller_lower, blocked_seller):
+            return True
+
+    return False
+
+
 def create_discord_timestamp(timestamp: str | int, suffix: str = "f") -> str:
     return f"<t:{str(timestamp)}:{suffix}>"
 
@@ -126,3 +139,10 @@ def format_price(price: float | None, currency: str | None = None) -> str:
         str_price += f" {currency}"
 
     return str_price
+
+
+def get_ebay_seller_url(username: str | None) -> str:
+    if not username:
+        return "https://www.powerpcfan.xyz/ebay-listing-scraper-discord-pings-internal/error-retrieving-seller-url"
+
+    return f"https://www.ebay.com/sch/i.html?_ssn={username}"

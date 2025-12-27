@@ -40,10 +40,10 @@ class PingConfig:
 class Config:
     debug_mode: bool
     log_api_responses: bool
-    full_tracebacks: bool
     send_test_webhooks: bool
     file_logging: bool
     ping_for_warnings: bool
+    commands: bool
 
     poll_interval_seconds: int
 
@@ -54,8 +54,10 @@ class Config:
     ebay_cert_id: str
     ebay_dev_id: str
 
-    pings: list[PingConfig]
     global_blocklist: list[str]
+    seller_blocklist: list[str]
+
+    pings: list[PingConfig]
 
     @staticmethod
     def load() -> "Config":
@@ -81,8 +83,8 @@ class Config:
 
             pings.append(PingConfig(**ping_data))
 
-        pings_count = len(pings)
-        parse_count = len([ping for ping in pings if ping.mode == Mode.PARSE])
-        query_count = len([ping for ping in pings if ping.mode == Mode.QUERY])
-
         return Config(pings=pings, **data)
+
+
+def reload_config() -> Config:
+    return Config.load()

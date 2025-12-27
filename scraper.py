@@ -1,16 +1,50 @@
 #!/usr/bin/env python3
 
 import sys
-import traceback
-from modules.logger import logger
+import threading
 import modules.ebay_api as ebay_api
 import modules.modes as modes
 import modules.discord as discord
-from modules.global_vars import config
+from modules import global_vars
+from modules.config_tools import reload_config
+from modules.logger import logger
+
+
+def command_listener() -> None:
+    prefix = ":"
+
+    for line in sys.stdin:
+        if line.strip() == prefix + "reload":
+            logger.info("Reloading configuration...")
+            global_vars.config = reload_config()
+            logger.info("Configuration reloaded!")
+            print_config_summary()
+
+
+def print_config_summary() -> None:
+    # uses print since this doesn't really need to go to the log file or discord webhook
+    print("\n\nCurrent Configuration Summary:")
+
+    print(f"  - Debug Mode: {global_vars.config.debug_mode}")
+    print(f"  - Log API Responses: {global_vars.config.log_api_responses}")
+    print(f"  - Send Test Webhooks: {global_vars.config.send_test_webhooks}")
+    print(f"  - File Logging: {global_vars.config.file_logging}")
+    print(f"  - Ping for Warnings: {global_vars.config.ping_for_warnings}")
+
+    print(f"  - Poll Interval: {global_vars.config.poll_interval_seconds} seconds")
+
+    print(f"  - Global Blocklist Patterns: {'\n    - '.join([""] + global_vars.config.global_blocklist) if global_vars.config.global_blocklist else None}")
+    print(f"  - Seller Blocklist Patterns: {'\n    - '.join([""] + global_vars.config.seller_blocklist) if global_vars.config.seller_blocklist else None}")
+
+    print(f"  - Loaded Ping Configs: {len(global_vars.config.pings)} (Parse Mode: {len([p for p in global_vars.config.pings if p.mode == modes.Mode.PARSE])}, Query Mode: {len([p for p in global_vars.config.pings if p.mode == modes.Mode.QUERY])})")
+
+    print("\n\n", end="")
 
 
 def main() -> None:
     logger.info("Initializing eBay Listing Scraper...")
+
+    print_config_summary()
 
     # init eBay API
     logger.debug("Connecting to eBay API...")
@@ -24,10 +58,10 @@ def main() -> None:
 
     # if send_test_webhooks is enabled, test every webhook
     # will raise exception if one webhook fails so then it will be caught in the main handler
-    if config.send_test_webhooks:
+    if global_vars.config.send_test_webhooks:
         logger.info("Testing webhooks...")
 
-        for ping in config.pings:
+        for ping in global_vars.config.pings:
             webhook_url = ping.webhook
             category_name = ping.category_name
 
@@ -37,45 +71,26 @@ def main() -> None:
                 content=f"Script started. This is a test webhook for the '{category_name}' category.",
                 embed=None,
                 username=f"Testing Webhook: {category_name}",
-                raise_exception_instead_of_print=config.debug_mode
+                raise_exception_instead_of_print=global_vars.config.debug_mode
             )
 
         logger.info("All webhooks tested successfully.")
 
-    # print welcome text
-    logger.newline()
-    logger.info("eBay Listing Scraper (Discord Pings Edition) starting...")
-    logger.info(f"eBay App ID: {config.ebay_app_id[:5]}...{config.ebay_app_id[-5:]}")
-    logger.info(f"Debug Mode: {config.debug_mode}")
-    logger.info(f"Full Tracebacks: {config.full_tracebacks}")
-    logger.info(f"Send Test Webhooks: {config.send_test_webhooks}")
-    logger.info(f"Ping for Warnings: {config.ping_for_warnings}")
-    logger.info(f"File Logging: {config.file_logging}")
-    logger.info(f"Poll Interval: {config.poll_interval_seconds} seconds")
-    logger.info(f"Configured {len(config.pings)} ping categories")
-    logger.info(f"Configured global blocklist with {len(config.global_blocklist)} patterns")
-    logger.info("Press Ctrl+C to exit")
-    logger.newline()
-
-    # Start matching mode
-    logger.info("Starting listing monitoring...")
+    logger.info("Script fully started. Monitoring listings...")
     modes.match()
 
 
 if __name__ == "__main__":
     try:
+        if global_vars.config.commands:
+            # Start Command Listener Thread
+            threading.Thread(target=command_listener, daemon=True).start()
+
+        # Run Main Loop
         main()
     except KeyboardInterrupt:
         logger.info("Exiting app. There may be missing logs in Discord if the logging queue was not emptied.")
         sys.exit(0)
     except Exception as e:
-        logger.critical("An unexpected error occurred!")
-        logger.error(f"Error details: {str(e)}")
-
-        if config.full_tracebacks:
-            logger.error("Full traceback:")
-            # traceback.print_exception(type(e), e, e.__traceback__)
-            for line in traceback.format_exception(type(e), e, e.__traceback__):
-                logger.error(line.strip())
-
+        logger.exception("An unexpected error occurred in the main loop! Details:")
         sys.exit(1)

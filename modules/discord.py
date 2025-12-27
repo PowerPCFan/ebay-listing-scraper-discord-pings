@@ -1,11 +1,17 @@
 import requests
 import time
-from .utils import create_discord_timestamp, format_price, get_listing_type_display, build_shipping_embed_value
 from .logger import logger
 from .global_vars import config
 from .config_tools import PingConfig
 from .ebay_api import EbayItem
 from .enums import Emojis
+from .utils import (
+    create_discord_timestamp,
+    format_price,
+    get_ebay_seller_url,
+    get_listing_type_display,
+    build_shipping_embed_value
+)
 
 
 def print_new_listing(item: EbayItem, ping_config: PingConfig) -> None:
@@ -35,7 +41,7 @@ def create_listing_embed(
             {
                 "name": f"{Emojis.SELLER} Seller:",
                 "value": (
-                    f"- Username: [{item.seller.username}](https://www.ebay.com/usr/{item.seller.username})\n"
+                    f"- Username: [{item.seller.username}]({get_ebay_seller_url(item.seller.username)})\n"
                     f"- **{feedback_score}** feedback score\n"
                     f"- **{item.seller.feedback_percentage}%** positive feedback"
                 ),

@@ -3,7 +3,7 @@ from . import ebay_api
 from . import global_vars
 from .config_tools import PingConfig
 from .global_vars import config
-from .utils import matches_pattern, is_globally_blocked, matches_blocklist_override
+from .utils import matches_pattern, is_globally_blocked, matches_blocklist_override, is_seller_blocked
 from .logger import logger
 from .discord import print_new_listing
 from .seen_items import seen_db
@@ -172,6 +172,10 @@ def matches_ping_criteria_parse(item: ebay_api.EbayItem, ping_config: PingConfig
         if not matches_blocklist_override(title_lower, "", "", ping_config.blocklist_override):
             return False
 
+    if is_seller_blocked(item.seller.username):
+        logger.debug(f"Item rejected: seller '{item.seller.username}' is blocklisted")
+        return False
+
     if BuyingOption.FIXED_PRICE not in item.buying_options:
         return False
 
@@ -188,6 +192,10 @@ def matches_ping_criteria_query(item: ebay_api.EbayItem, ping_config: PingConfig
     if is_globally_blocked(title_lower, "", ""):
         if not matches_blocklist_override(title_lower, "", "", ping_config.blocklist_override):
             return False
+
+    if is_seller_blocked(item.seller.username):
+        logger.debug(f"Item rejected: seller '{item.seller.username}' is blocklisted")
+        return False
 
     if BuyingOption.FIXED_PRICE not in item.buying_options:
         return False
