@@ -12,6 +12,8 @@ from typing import Callable
 
 
 def command_listener() -> None:
+    prefix = "!"
+
     def _reload_config() -> None:
         logger.info("Reloading configuration...")
         global_vars.config = reload_config()
@@ -21,7 +23,7 @@ def command_listener() -> None:
     commands: dict[str, Callable[..., None]] = {
         "reload": _reload_config
     }
-    commands = {(":" + k): v for k, v in commands.items()}
+    commands = {(prefix + k): v for k, v in commands.items()}
 
     for line in sys.stdin:
         stripped = line.strip()
@@ -32,6 +34,9 @@ def command_listener() -> None:
             elif stripped.startswith(command + " "):
                 function(*stripped[(len(command) + 1):].split())
                 break
+            else:
+                if stripped.startswith(prefix):
+                    logger.warning(f"Unknown command: {stripped}")
 
 
 def print_config_summary() -> None:
