@@ -1,0 +1,4 @@
+[flake8]
+max-line-length = 120
+# Pylance handles these
+ignore = F821, F841

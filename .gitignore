@@ -6,3 +6,8 @@ config.json
 /version-*-backup
 /temp-images
 /logs
+*.db
+data/
+*.log
+response-*.json
+responses/

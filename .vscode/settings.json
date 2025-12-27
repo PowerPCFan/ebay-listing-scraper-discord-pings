@@ -1,0 +1,9 @@
+{
+    "highlight.regexFlags": "g",
+    "highlight.regexes": {
+        "(regexp::)": [{
+            "color": "#D16969",
+            "fontWeight": "bold"
+        }]
+    }
+}
