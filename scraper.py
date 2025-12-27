@@ -27,16 +27,20 @@ def command_listener() -> None:
 
     for line in sys.stdin:
         stripped = line.strip()
+        matched = False
+
         for command, function in commands.items():
             if stripped == command:
+                matched = True
                 function()
                 break
             elif stripped.startswith(command + " "):
+                matched = True
                 function(*stripped[(len(command) + 1):].split())
                 break
-            else:
-                if stripped.startswith(prefix):
-                    logger.warning(f"Unknown command: {stripped}")
+
+        if not matched and stripped.startswith(prefix):
+            logger.warning(f"Unknown command: {stripped}")
 
 
 def print_config_summary() -> None:
