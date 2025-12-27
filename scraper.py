@@ -33,10 +33,10 @@ def print_config_summary() -> None:
 
     print(f"  - Poll Interval: {global_vars.config.poll_interval_seconds} seconds")
 
-    print(f"  - Global Blocklist Patterns: {'\n    - '.join([""] + global_vars.config.global_blocklist) if global_vars.config.global_blocklist else None}")
-    print(f"  - Seller Blocklist Patterns: {'\n    - '.join([""] + global_vars.config.seller_blocklist) if global_vars.config.seller_blocklist else None}")
+    print(f"  - Global Blocklist Patterns: {'\n    - '.join([""] + global_vars.config.global_blocklist) if global_vars.config.global_blocklist else None}")  # noqa: E501
+    print(f"  - Seller Blocklist Patterns: {'\n    - '.join([""] + global_vars.config.seller_blocklist) if global_vars.config.seller_blocklist else None}")  # noqa: E501
 
-    print(f"  - Loaded Ping Configs: {len(global_vars.config.pings)} (Parse Mode: {len([p for p in global_vars.config.pings if p.mode == modes.Mode.PARSE])}, Query Mode: {len([p for p in global_vars.config.pings if p.mode == modes.Mode.QUERY])})")
+    print(f"  - Loaded Ping Configs: {len(global_vars.config.pings)} (Parse Mode: {len([p for p in global_vars.config.pings if p.mode == modes.Mode.PARSE])}, Query Mode: {len([p for p in global_vars.config.pings if p.mode == modes.Mode.QUERY])})")  # noqa: E501
 
     print("\n\n", end="")
 
