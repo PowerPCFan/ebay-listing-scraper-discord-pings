@@ -1,4 +1,4 @@
-import time
+import asyncio
 from . import ebay_api
 from . import global_vars
 from .config_tools import PingConfig
@@ -14,15 +14,20 @@ exception_count = 0
 exceptions: list[str] = []
 
 
-def match() -> None:
+async def match() -> None:
     logger.info("Starting to monitor for new eBay listings...")
 
     while True:
+        await global_vars.scraper_paused.wait()
+
         try:
             parse_mode_pings = [ping for ping in config.pings if ping.mode == Mode.PARSE]
             query_mode_pings = [ping for ping in config.pings if ping.mode == Mode.QUERY]
 
             if parse_mode_pings:
+                if not global_vars.scraper_paused.is_set():
+                    continue
+
                 all_categories = set()
                 ping_to_categories = {}
 
@@ -32,9 +37,19 @@ def match() -> None:
 
                 category_cache = {}
 
+                tasks = []
                 for category_id in all_categories:
                     logger.debug(f"Fetching listings for category: {category_id}")
-                    items = ebay_api.search_single_category(category_id)
+                    task = ebay_api.search_single_category(category_id)
+                    tasks.append(task)
+
+                if not global_vars.scraper_paused.is_set():
+                    logger.debug("Scraper paused before API calls")
+                    continue
+
+                results = await asyncio.gather(*tasks)
+
+                for category_id, items in zip(all_categories, results):
                     category_cache[category_id] = items
                     logger.debug(f"Cached {len(items)} items for category {category_id}")
 
@@ -43,6 +58,10 @@ def match() -> None:
                 )
 
                 for i, ping_config in enumerate(parse_mode_pings):
+                    if not global_vars.scraper_paused.is_set():
+                        logger.debug("Scraper paused during ping config processing")
+                        break
+
                     combined_items = {}
 
                     for category_id in ping_to_categories[i]:
@@ -56,6 +75,10 @@ def match() -> None:
 
                     new_matches = 0
                     for item_data in items_list:
+                        if not global_vars.scraper_paused.is_set():
+                            logger.debug("Scraper paused during item processing")
+                            break
+
                         item = ebay_api.EbayItem(item_data)
 
                         if seen_db.is_seen(item.item_id):
@@ -63,10 +86,10 @@ def match() -> None:
 
                         if matches_ping_criteria_parse(item, ping_config):
                             logger.info(f"New matching listing: {item.title[:25]}... - ${item.price.value}")
-                            print_new_listing(item, ping_config)
+                            await print_new_listing(item, ping_config)
                             seen_db.mark_seen(item.item_id, ping_config.category_name, item.title, Mode.PARSE.value)
                             new_matches += 1
-                            time.sleep(1)
+                            await asyncio.sleep(1)
                         else:
                             seen_db.mark_seen(item.item_id, ping_config.category_name, item.title, Mode.PARSE.value)
 
@@ -79,9 +102,13 @@ def match() -> None:
 
             if query_mode_pings:
                 for ping_config in query_mode_pings:
+                    if not global_vars.scraper_paused.is_set():
+                        logger.debug("Scraper paused during query mode processing")
+                        break
+
                     if ping_config.query and ping_config.query.query:
                         logger.debug(f"Searching query: {ping_config.query.query}")
-                        items = ebay_api.search_query(
+                        items = await ebay_api.search_query(
                             ping_config.query.query,
                             [str(c) for c in ping_config.categories],
                             ping_config.query.min_price,
@@ -91,6 +118,10 @@ def match() -> None:
                         logger.debug(f"Query returned {len(items)} items for {ping_config.category_name}")
                         new_matches = 0
                         for item_data in items:
+                            if not global_vars.scraper_paused.is_set():
+                                logger.debug("Scraper paused during query item processing")
+                                break
+
                             item = ebay_api.EbayItem(item_data)
 
                             if seen_db.is_seen(item.item_id):
@@ -98,10 +129,10 @@ def match() -> None:
 
                             if matches_ping_criteria_query(item, ping_config):
                                 logger.info(f"New matching listing: {item.title[:25]}... - ${item.price.value}")
-                                print_new_listing(item, ping_config)
+                                await print_new_listing(item, ping_config)
                                 seen_db.mark_seen(item.item_id, ping_config.category_name, item.title, Mode.QUERY.value)
                                 new_matches += 1
-                                time.sleep(1)
+                                await asyncio.sleep(1)
                             else:
                                 seen_db.mark_seen(item.item_id, ping_config.category_name, item.title, Mode.QUERY.value)
 
@@ -116,14 +147,23 @@ def match() -> None:
             logger.debug(f"API calls made: {global_vars.api_call_count}")
             global_vars.api_call_count = 0  # reset for next interval
             logger.debug(f"Waiting {config.poll_interval_seconds} seconds until next poll...")
-            time.sleep(config.poll_interval_seconds)
+
+            remaining_sleep = config.poll_interval_seconds
+            while remaining_sleep > 0:
+                if not global_vars.scraper_paused.is_set():
+                    logger.debug("Scraper paused during sleep interval")
+                    break
+
+                sleep_chunk = min(10, remaining_sleep)
+                await asyncio.sleep(sleep_chunk)
+                remaining_sleep -= sleep_chunk
         except Exception:
             global exception_count
             exception_count += 1
 
             if exception_count < 5:
                 logger.exception("Error in loop. Retrying in 20 seconds...")
-                time.sleep(20)
+                await asyncio.sleep(20)
             else:
                 logger.critical("Repeated errors in loop. Check configuration and eBay API status.")
                 raise

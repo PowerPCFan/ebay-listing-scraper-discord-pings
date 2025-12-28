@@ -1,7 +1,5 @@
 import logging
-import time
-import queue
-import threading
+import asyncio
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from .global_vars import config
@@ -126,13 +124,14 @@ class CustomLogger:
     def getEffectiveLevel(self) -> int:
         return self.base_logger.getEffectiveLevel()
 
-    def newline(self) -> None:
+    async def newline(self) -> None:
         print("\n", end="")
 
         for handler in self.base_logger.handlers:
             if isinstance(handler, DiscordWebhookHandler):
                 try:
-                    handler.message_queue.put("_ _")
+                    assert handler.message_queue is not None
+                    await handler.message_queue.put("_ _")
                     return
                 except Exception:
                     print("[ ERROR ] Failed to queue newline for Discord webhook!")
@@ -147,22 +146,39 @@ class FileLoggingHandler(logging.Handler):
     def __init__(self, log_file_path: str, level: int = logging.NOTSET) -> None:
         super().__init__(level)
         self.log_file_path = Path(log_file_path)
-        self.message_queue = queue.Queue()
-        self.worker_thread = None
-        self.shutdown_flag = threading.Event()
-        self._start_worker()
+        self.message_queue = None
+        self.worker_task = None
+        self.shutdown_event = None
+        try:
+            self._start_worker()
+        except Exception as e:
+            print(f"[ ERROR ] Failed to setup file logging: {e}")
 
     def _start_worker(self) -> None:
-        if self.worker_thread is None or not self.worker_thread.is_alive():
-            self.worker_thread = threading.Thread(target=self._worker, daemon=True)
-            self.worker_thread.start()
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                if self.message_queue is None:
+                    self.message_queue = asyncio.Queue()
+                if self.shutdown_event is None:
+                    self.shutdown_event = asyncio.Event()
 
-    def _worker(self) -> None:
+                if self.worker_task is None or self.worker_task.done():
+                    self.worker_task = asyncio.create_task(self._worker())
+            else:
+                self.worker_task = None
+        except RuntimeError:
+            self.worker_task = None
+
+    async def _worker(self) -> None:
+        if self.shutdown_event is None or self.message_queue is None:
+            return  # No async components initialized
+
         self.log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        while not self.shutdown_flag.is_set():
+        while not self.shutdown_event.is_set():
             try:
-                content = self.message_queue.get(timeout=1.0)
+                content = await asyncio.wait_for(self.message_queue.get(), timeout=1.0)
                 if content is None:
                     break
 
@@ -172,7 +188,7 @@ class FileLoggingHandler(logging.Handler):
 
                 self.message_queue.task_done()
 
-            except queue.Empty:
+            except asyncio.TimeoutError:
                 continue
             except Exception as e:
                 print(f"[ ERROR ] File logging worker error: {e}")
@@ -180,21 +196,46 @@ class FileLoggingHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             level_name = logging.getLevelName(record.levelno).center(8)
-            asctime = time.strftime("%m/%d/%Y %H:%M:%S", time.localtime(record.created))
+            asctime = datetime.fromtimestamp(record.created).strftime("%m/%d/%Y %H:%M:%S")
             message = record.getMessage()
 
             content = f"[ {level_name} ]    {message}    [{asctime} ({record.filename}:{record.funcName})]"
 
-            self.message_queue.put(content)
+            if self.worker_task is None:
+                self._start_worker()
 
-        except Exception:
-            print("[ ERROR ] Failed to queue log for file!")
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running() and self.message_queue is not None:
+                    self.message_queue.put_nowait(content)
+                else:
+                    self.log_file_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(self.log_file_path, 'a', encoding='utf-8') as f:
+                        f.write(content + '\n')
+                        f.flush()
+            except RuntimeError:
+                self.log_file_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.log_file_path, 'a', encoding='utf-8') as f:
+                    f.write(content + '\n')
+                    f.flush()
+
+        except Exception as e:
+            print(f"[ ERROR ] Failed to emit file log: {e}")
 
     def close(self) -> None:
-        self.shutdown_flag.set()
-        self.message_queue.put(None)
-        if self.worker_thread and self.worker_thread.is_alive():
-            self.worker_thread.join(timeout=5.0)
+        if self.shutdown_event is not None:
+            self.shutdown_event.set()
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running() and self.message_queue is not None:
+                self.message_queue.put_nowait(None)
+                if self.worker_task and not self.worker_task.done():
+                    self.worker_task.cancel()
+            elif self.message_queue is not None:
+                asyncio.run(self.message_queue.put(None))
+        except RuntimeError:
+            pass
         super().close()
 
 
@@ -225,30 +266,46 @@ class DiscordWebhookHandler(logging.Handler):
         super().__init__(level)
         self.webhook_url: str = webhook_url
         self.ping_webhook: str | None = ping_webhook
-        self.message_queue = queue.Queue()
-        self.worker_thread = None
-        self.shutdown_flag = threading.Event()
-        self._start_worker()
+        self.message_queue = None
+        self.worker_task = None
+        self.shutdown_event = None
+        try:
+            self._start_worker()
+        except Exception as e:
+            print(f"[ ERROR ] Failed to setup Discord webhook handler: {e}")
 
     def _start_worker(self) -> None:
-        if self.worker_thread is None or not self.worker_thread.is_alive():
-            self.worker_thread = threading.Thread(target=self._worker, daemon=True)
-            self.worker_thread.start()
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                if self.message_queue is None:
+                    self.message_queue = asyncio.Queue()
+                if self.shutdown_event is None:
+                    self.shutdown_event = asyncio.Event()
+                if self.worker_task is None or self.worker_task.done():
+                    self.worker_task = asyncio.create_task(self._worker())
+            else:
+                self.worker_task = None
+        except RuntimeError:
+            self.worker_task = None
 
-    def _worker(self) -> None:
-        while not self.shutdown_flag.is_set():
+    async def _worker(self) -> None:
+        if self.shutdown_event is None or self.message_queue is None:
+            return
+
+        while not self.shutdown_event.is_set():
             try:
-                content = self.message_queue.get(timeout=1.0)
+                content = await asyncio.wait_for(self.message_queue.get(), timeout=1.0)
                 if content is None:
                     break
 
                 webhook_sender.send(self.webhook_url, content)
 
-                time.sleep(0.5)
+                await asyncio.sleep(0.5)
 
                 self.message_queue.task_done()
 
-            except queue.Empty:
+            except asyncio.TimeoutError:
                 continue
             except Exception as e:
                 print(f"[ ERROR ] Discord webhook worker error: {e}")
@@ -259,7 +316,7 @@ class DiscordWebhookHandler(logging.Handler):
 
         try:
             level_name = logging.getLevelName(record.levelno)
-            asctime = time.strftime("%y/%m/%d %H:%M:%S", time.localtime(record.created))
+            asctime = datetime.fromtimestamp(record.created).strftime("%y/%m/%d %H:%M:%S")
             message = record.getMessage()
 
             ping_content = ""
@@ -283,17 +340,36 @@ class DiscordWebhookHandler(logging.Handler):
             if _discord_webhook_send_count == 1:
                 content = "_ _ \n_ _ \n_ _ \n" + content  # add newlines at the beginning of first log to separate logs
 
-            self.message_queue.put(content)
+            if self.worker_task is None:
+                self._start_worker()
+
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running() and self.message_queue is not None:
+                    self.message_queue.put_nowait(content)
+                else:
+                    webhook_sender.send(self.webhook_url, content)
+            except RuntimeError:
+                webhook_sender.send(self.webhook_url, content)
 
         except Exception:
             # use print so i don't cause an infinite loop of errors
             print("[ ERROR ] Failed to queue log for Discord webhook!")
 
     def close(self) -> None:
-        self.shutdown_flag.set()
-        self.message_queue.put(None)  # Signal worker to stop
-        if self.worker_thread and self.worker_thread.is_alive():
-            self.worker_thread.join(timeout=5.0)
+        if self.shutdown_event is not None:
+            self.shutdown_event.set()
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running() and self.message_queue is not None:
+                self.message_queue.put_nowait(None)
+                if self.worker_task and not self.worker_task.done():
+                    self.worker_task.cancel()
+            elif self.message_queue is not None:
+                asyncio.run(self.message_queue.put(None))
+        except RuntimeError:
+            pass
         super().close()
 
 

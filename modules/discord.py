@@ -1,5 +1,5 @@
-import requests
-import time
+import httpx
+import asyncio
 from .logger import logger
 from .global_vars import config
 from .config_tools import PingConfig
@@ -14,10 +14,10 @@ from .utils import (
 )
 
 
-def print_new_listing(item: EbayItem, ping_config: PingConfig) -> None:
+async def print_new_listing(item: EbayItem, ping_config: PingConfig) -> None:
     logger.debug(f"Sending Discord notification for {ping_config.category_name}")
 
-    send_webhook(
+    await send_webhook(
         webhook_url=ping_config.webhook,
         content=f"<@&{ping_config.role}>" if ping_config.role else "",
         username="eBay Listing Scraper Alerts",
@@ -85,7 +85,7 @@ def create_listing_embed(
     return embed
 
 
-def send_webhook(
+async def send_webhook(
     webhook_url: str,
     content: str | None,
     embed: dict | None,
@@ -101,31 +101,33 @@ def send_webhook(
     logger.debug(f"Sending Discord webhook to {webhook_url[:30]} (truncated)...")
 
     try:
-        response = requests.post(webhook_url, json=json_data, timeout=10)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(webhook_url, json=json_data)
 
-        if response.status_code == 429:
-            default_retry = 2
+            if response.status_code == 429:
+                default_retry = 2
 
-            logger.warning("Rate limited by Discord, retrying...")
+                logger.warning("Rate limited by Discord, retrying...")
 
-            try:
-                retry_after = dict(response.json()).get(
-                    "retry_after", response.headers.get("Retry-After", default_retry)
+                try:
+                    response_data = response.json()
+                    retry_after = response_data.get(
+                        "retry_after", response.headers.get("Retry-After", default_retry)
+                    )
+                    logger.debug(f"Retrying after {retry_after} seconds...")
+                    await asyncio.sleep(retry_after)
+                    response = await client.post(webhook_url, json=json_data)
+                except (ValueError, Exception):
+                    await asyncio.sleep(default_retry)
+                    response = await client.post(webhook_url, json=json_data)
+
+            if response.status_code not in [200, 204]:
+                logger.error(
+                    f"Webhook failed with status {response.status_code}: {response.text}"
                 )
-                logger.debug(f"Retrying after {retry_after} seconds...")
-                time.sleep(retry_after)
-                response = requests.post(webhook_url, json=json_data)
-            except ValueError:
-                time.sleep(default_retry)
-                response = requests.post(webhook_url, json=json_data)
-
-        if response.status_code not in [200, 204]:
-            logger.error(
-                f"Webhook failed with status {response.status_code}: {response.text}"
-            )
-        else:
-            logger.debug("Discord webhook sent successfully")
-    except requests.exceptions.RequestException as e:
+            else:
+                logger.debug("Discord webhook sent successfully")
+    except httpx.RequestError as e:
         msg = "Error sending webhook:"
 
         if raise_exception_instead_of_print:
