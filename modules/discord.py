@@ -1,5 +1,6 @@
 import httpx
 import asyncio
+from datetime import datetime
 from .logger import logger
 from .global_vars import config
 from .config_tools import PingConfig
@@ -39,6 +40,16 @@ def create_listing_embed(
         "color": 0x0064D3,
         "fields": [
             {
+                "name": f"{Emojis.PRICE} Price:",
+                "value": format_price(item.price.value),
+                "inline": True
+            },
+            {
+                "name": f"{Emojis.SHIPPING} Shipping:",
+                "value": build_shipping_embed_value(shipping),
+                "inline": True
+            },
+            {
                 "name": f"{Emojis.SELLER} Seller:",
                 "value": (
                     f"- Username: [{item.seller.username}]({get_ebay_seller_url(item.seller.username)})\n"
@@ -46,16 +57,6 @@ def create_listing_embed(
                     f"- **{item.seller.feedback_percentage}%** positive feedback"
                 ),
                 "inline": False,
-            },
-            {
-                "name": f"{Emojis.PRICE} Price:",
-                "value": format_price(item.price.value),
-                "inline": False
-            },
-            {
-                "name": f"{Emojis.SHIPPING} Shipping:",
-                "value": build_shipping_embed_value(shipping),
-                "inline": False
             },
             {
                 "name": f"{Emojis.CALENDAR} Date Posted:",
@@ -76,11 +77,12 @@ def create_listing_embed(
         "footer": {
             "text": f"eBay Item ID: {item.item_id}",
             "icon_url": "https://i.ibb.co/Cs9ZFL2C/Untitled-drawing-1.png",
-        }
+        },
+        "timestamp": datetime.utcnow().isoformat()
     }
 
-    if item.thumbnail:
-        embed["image"] = {"url": item.thumbnail}
+    if item.main_image:
+        embed["thumbnail"] = {"url": item.main_image}
 
     return embed
 

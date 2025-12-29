@@ -107,6 +107,22 @@ class EbayItem:
         return str(thumb) if thumb else None
 
     @property
+    def main_image(self) -> str | None:
+        thumbnail_images: list[dict[str, str]] | None = self.data.get("thumbnailImages", None)
+
+        if not thumbnail_images or not isinstance(thumbnail_images, list):
+            return None
+
+        first_image_dict = thumbnail_images[0] if thumbnail_images else None
+
+        if not first_image_dict or not isinstance(first_image_dict, dict):
+            return None
+
+        image = first_image_dict.get("imageUrl", None)
+
+        return str(image) if image else None
+
+    @property
     def price(self) -> Price:
         _price = dict(self.data.get("price", {}))
 

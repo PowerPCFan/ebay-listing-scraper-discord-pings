@@ -87,6 +87,11 @@ class Emojis:
     SELLER = "<:seller:1453721027103428609>"
     CONDITION = "<:condition:1453722903609610504>"
     LISTING_TYPE = "<:listing_type:1453723643766112388>"
+    WARNING = "<:warning:1454943218570367157>"
+    FIRE_DEAL = "<:fire_deal:1454943220000755924>"
+    OK_DEAL = "<:ok_deal:1454943221867352236>"
+    GOOD_DEAL = "<:good_deal:1454943223263920232>"
+    GREAT_DEAL = "<:great_deal:1454943224480268391>"
 
 
 class Mode(Enum):
