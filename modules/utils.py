@@ -143,6 +143,9 @@ def format_price(price: float | None, currency: str | None = None) -> str:
 
 def get_ebay_seller_url(username: str | None) -> str:
     if not username:
+        # note: this URL supports the param ?sellerName=... to add a message that says:
+        # "💡Tip: Try searching for "{sellerName}" on eBay."
+        # however with how this function works, username would be None here, so we can't add that param
         return "https://www.powerpcfan.xyz/ebay-listing-scraper-discord-pings-internal/error-retrieving-seller-url"
 
     return f"https://www.ebay.com/sch/i.html?_ssn={username}"

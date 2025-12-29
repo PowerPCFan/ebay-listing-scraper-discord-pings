@@ -20,22 +20,12 @@ async def command_listener() -> None:
         logger.info("Configuration reloaded!")
         print_config_summary()
 
-    def _pause_scraper() -> None:
-        global_vars.scraper_paused.clear()
-        logger.info("Scraper paused. Use '!resume' in the console to continue.")
-
-    def _resume_scraper() -> None:
-        global_vars.scraper_paused.set()
-        logger.info("Scraper resumed.")
-
     def _exit() -> None:
         logger.info("Exiting application.")
         sys.exit(0)
 
     raw_commands: dict[tuple[str, ...], Callable[..., None]] = {
         ("reload",): _reload_config,
-        ("pause", "stop"): _pause_scraper,
-        ("resume", "play", "start"): _resume_scraper,
         ("quit", "exit", "q!", "q", "qa", "wq"): _exit
     }
 
