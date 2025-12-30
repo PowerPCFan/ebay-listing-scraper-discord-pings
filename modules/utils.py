@@ -1,7 +1,15 @@
 import re as regexp
 from datetime import datetime, timezone
 from .global_vars import config
-from .enums import BuyingOptions, BuyingOption, ShippingType, ShippingOption, Emojis
+from .enums import (
+    BuyingOptions,
+    BuyingOption,
+    ShippingType,
+    ShippingOption,
+    Emojis,
+    Deal,
+    DealTuple
+)
 
 
 def matches_pattern(text: str, pattern: str, regex_prefix: str = 'regexp::') -> bool:
@@ -105,7 +113,7 @@ def generate_shipping_string(shipping: ShippingOption) -> str:
         shipping_string = "Calculated at Checkout"
     elif shipping.type == ShippingType.FIXED:
         if shipping.cost.value is not None and shipping.cost.value > 0:
-            shipping_string = format_price(shipping.cost.value)
+            shipping_string = format_price(shipping.cost.value) + " " + (shipping.cost.currency or "USD")
         else:
             shipping_string = "Free Shipping"
     elif shipping.type == ShippingType.UNKNOWN:
@@ -149,3 +157,36 @@ def get_ebay_seller_url(username: str | None) -> str:
         return "https://www.powerpcfan.xyz/ebay-listing-scraper-discord-pings-internal/error-retrieving-seller-url"
 
     return f"https://www.ebay.com/sch/i.html?_ssn={username}"
+
+
+def evaluate_deal(price: float | None, min_price: float | None, max_price: float | None) -> DealTuple:
+    if min_price is None or max_price is None or price is None:
+        return Deal.UNKNOWN_DEAL
+
+    if price < min_price or price > max_price:
+        return Deal.UNKNOWN_DEAL
+
+    # Divide the price range into segments for each deal level:
+    #   Fire Deal - first quarter
+    #   Great Deal - second quarter
+    #   Good Deal - third quarter
+    #   Ok Deal - fourth quarter
+    # with the lowest quarter being the first 25% and highest quarter being the last 25%.
+
+    range_span = max_price - min_price
+    quarter = range_span / 4
+
+    if price <= min_price + quarter:
+        # price is in the first quarter
+        return Deal.FIRE_DEAL
+    elif price <= min_price + 2 * quarter:
+        # price is in the second quarter
+        return Deal.GREAT_DEAL
+    elif price <= min_price + 3 * quarter:
+        # price is in the third quarter
+        return Deal.GOOD_DEAL
+    elif price <= min_price + 4 * quarter:
+        # price is in the fourth quarter
+        return Deal.OK_DEAL
+    else:
+        return Deal.UNKNOWN_DEAL

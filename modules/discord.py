@@ -5,7 +5,7 @@ from .logger import logger
 from .global_vars import config
 from .config_tools import PingConfig
 from .ebay_api import EbayItem
-from .enums import Emojis
+from .enums import Emojis, DealTuple
 from .utils import (
     create_discord_timestamp,
     format_price,
@@ -15,39 +15,49 @@ from .utils import (
 )
 
 
-async def print_new_listing(item: EbayItem, ping_config: PingConfig) -> None:
+async def print_new_listing(item: EbayItem, ping_config: PingConfig, deal: DealTuple) -> None:
     logger.debug(f"Sending Discord notification for {ping_config.category_name}")
 
     await send_webhook(
         webhook_url=ping_config.webhook,
         content=f"<@&{ping_config.role}>" if ping_config.role else "",
         username="eBay Listing Scraper Alerts",
-        embed=create_listing_embed(item),
+        embed=create_listing_embed(item, deal),
         raise_exception_instead_of_print=config.debug_mode,
     )
 
 
 def create_listing_embed(
-    item: EbayItem
+    item: EbayItem,
+    deal: DealTuple
 ) -> dict:
     shipping = item.shipping[0] if item.shipping else None
     feedback_score = item.seller.feedback_score if item.seller.feedback_score is not None else 'Unknown'
     condition = item.condition.name if (item.condition is not None and item.condition.name is not None) else "Unknown"
+    price = format_price(item.price.value) + " " + (item.price.currency or "USD")
 
     embed = {
         "title": item.title,
         "url": item.url,
-        "color": 0x0064D3,
+        "color": deal.color,
+        "author": {
+            "name": f"{deal.emoji} {deal.name}"
+        },
         "fields": [
             {
                 "name": f"{Emojis.PRICE} Price:",
-                "value": format_price(item.price.value),
+                "value": price,
+                "inline": True
+            },
+            {
+                "name": f"{Emojis.CONDITION} Condition:",
+                "value": condition,
                 "inline": True
             },
             {
                 "name": f"{Emojis.SHIPPING} Shipping:",
                 "value": build_shipping_embed_value(shipping),
-                "inline": True
+                "inline": False
             },
             {
                 "name": f"{Emojis.SELLER} Seller:",
@@ -61,11 +71,6 @@ def create_listing_embed(
             {
                 "name": f"{Emojis.CALENDAR} Date Posted:",
                 "value": create_discord_timestamp(item.date_posted),
-                "inline": False
-            },
-            {
-                "name": f"{Emojis.CONDITION} Condition:",
-                "value": condition,
                 "inline": False
             },
             {

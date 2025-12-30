@@ -1,0 +1,3 @@
+- Convert to discord.py bot
+- Refine the new async code to my liking
+- Re-evaluate evaluate_deal() logic since I can picture some edge cases where it wouldn't work as intended

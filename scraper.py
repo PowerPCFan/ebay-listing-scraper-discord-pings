@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
+import os
 import sys
+import signal
 import asyncio
 import modules.ebay_api as ebay_api
 import modules.modes as modes
@@ -22,7 +24,8 @@ async def command_listener() -> None:
 
     def _exit() -> None:
         logger.info("Exiting application.")
-        sys.exit(0)
+        # sys.exit(0)
+        os.kill(os.getpid(), signal.SIGINT)
 
     raw_commands: dict[tuple[str, ...], Callable[..., None]] = {
         ("reload",): _reload_config,
@@ -78,7 +81,7 @@ def print_config_summary() -> None:
     print(f"  - Global Blocklist Patterns: {'\n    - '.join([""] + global_vars.config.global_blocklist) if global_vars.config.global_blocklist else None}")  # noqa: E501
     print(f"  - Seller Blocklist Patterns: {'\n    - '.join([""] + global_vars.config.seller_blocklist) if global_vars.config.seller_blocklist else None}")  # noqa: E501
 
-    print(f"  - Loaded Ping Configs: {len(global_vars.config.pings)} (Parse Mode: {len([p for p in global_vars.config.pings if p.mode == modes.Mode.PARSE])}, Query Mode: {len([p for p in global_vars.config.pings if p.mode == modes.Mode.QUERY])})")  # noqa: E501
+    print(f"  - Loaded Ping Configs: {len(global_vars.config.pings)}")
 
     print("\n\n", end="")
 

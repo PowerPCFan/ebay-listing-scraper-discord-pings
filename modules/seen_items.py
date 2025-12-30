@@ -21,8 +21,7 @@ class SeenItemsDB:
                         item_id        INTEGER  PRIMARY KEY,
                         timestamp      INTEGER  NOT NULL,
                         category_name  TEXT,
-                        title          TEXT,
-                        mode           TEXT
+                        title          TEXT
                     )
                 """)
                 conn.commit()
@@ -45,16 +44,15 @@ class SeenItemsDB:
         item_id: int,
         category_name: str | None = None,
         title: str = "",
-        mode: str = ""
     ) -> None:
         try:
             current_time = int(time.time())
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("""
                     INSERT OR REPLACE INTO seen_items
-                    (item_id, timestamp, category_name, title, mode)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (item_id, current_time, category_name, title, mode))
+                    (item_id, timestamp, category_name, title)
+                    VALUES (?, ?, ?, ?)
+                """, (item_id, current_time, category_name, title))
                 conn.commit()
             logger.debug(f"Marked item {item_id} as seen")
         except Exception:
