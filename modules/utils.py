@@ -130,9 +130,11 @@ def build_shipping_embed_value(shipping: ShippingOption | None) -> str:
     arrival_info = ""
 
     if shipping.min_estimated_delivery_date and shipping.max_estimated_delivery_date:
-        min_ts = create_discord_timestamp((shipping.min_estimated_delivery_date or 0), suffix='D')
-        max_ts = create_discord_timestamp((shipping.max_estimated_delivery_date or 0), suffix='D')
-        arrival_info = f"\nArrival Date: {min_ts} - {max_ts}"
+        # min_ts = create_discord_timestamp((shipping.min_estimated_delivery_date or 0), suffix='D')
+        # max_ts = create_discord_timestamp((shipping.max_estimated_delivery_date or 0), suffix='D')
+        min_ts = create_discord_timestamp((shipping.min_estimated_delivery_date or 0), suffix='d')
+        max_ts = create_discord_timestamp((shipping.max_estimated_delivery_date or 0), suffix='d')
+        arrival_info = f"\nArrival Date: {min_ts} to {max_ts}"
 
     return shipping_cost + arrival_info
 
