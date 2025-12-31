@@ -1,6 +1,6 @@
 import re as regexp
 from datetime import datetime, timezone
-from .global_vars import config
+from . import global_vars as gv
 from .enums import (
     BuyingOptions,
     BuyingOption,
@@ -28,12 +28,12 @@ def matches_pattern(text: str, pattern: str, regex_prefix: str = 'regexp::') -> 
 
 
 def is_globally_blocked(content: str, extra1: str = "", extra2: str = "") -> bool:
-    if not config.global_blocklist:
+    if not gv.config.global_blocklist:
         return False
 
     content_to_check = f"{content} {extra1} {extra2}".lower().strip()
 
-    for blocked_pattern in config.global_blocklist:
+    for blocked_pattern in gv.config.global_blocklist:
         if matches_pattern(content_to_check, blocked_pattern):
             return True
 
@@ -59,12 +59,12 @@ def matches_blocklist_override(
 
 
 def is_seller_blocked(seller_username: str | None) -> bool:
-    if not config.seller_blocklist or not seller_username:
+    if not gv.config.seller_blocklist or not seller_username:
         return False
 
-    seller_lower = seller_username.lower().strip()
+    seller_lower = seller_username.lower()
 
-    for blocked_seller in config.seller_blocklist:
+    for blocked_seller in gv.config.seller_blocklist:
         if matches_pattern(seller_lower, blocked_seller):
             return True
 

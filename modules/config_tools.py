@@ -21,9 +21,9 @@ type Keywords = list[Keyword]
 class PingConfig:
     category_name: str
     categories: list[int]
-    webhook: str
-    role: int | None
     keywords: Keywords
+    channel_id: int
+    role: int
     exclude_keywords: list[str] = field(default_factory=list)
     blocklist_override: list[str] = field(default_factory=list)
 
@@ -32,16 +32,19 @@ class PingConfig:
 class Config:
     debug_mode: bool
     log_api_responses: bool
-    send_test_webhooks: bool
     file_logging: bool
     ping_for_warnings: bool
-    commands: bool
+    start_on_command: bool
+    bot_debug_commands: bool
 
     poll_interval_seconds: int
 
     ebay_app_id: str
     ebay_cert_id: str
     ebay_dev_id: str
+
+    discord_bot_token: str
+    discord_guild_id: int
 
     global_blocklist: list[str]
     seller_blocklist: list[str]

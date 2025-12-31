@@ -2,12 +2,12 @@ import logging
 import asyncio
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from .global_vars import config
+from . import global_vars as gv
 from . import webhook_sender
 
 _discord_webhook_send_count = 0
-setLevelValue = logging.DEBUG if config.debug_mode else logging.INFO
-LOGGER_DISCORD_WEBHOOK_URL = config.logger_webhook
+setLevelValue = logging.DEBUG if gv.config.debug_mode else logging.INFO
+LOGGER_DISCORD_WEBHOOK_URL = gv.config.logger_webhook
 
 ANSI = "\033["
 RESET = f"{ANSI}0m"
@@ -137,7 +137,10 @@ class CustomLogger:
                     print("[ ERROR ] Failed to queue newline for Discord webhook!")
 
         try:
-            webhook_sender.send(config.logger_webhook, "_ _")
+            if not gv.config.logger_webhook:
+                raise ValueError("No logger webhook URL configured.")
+
+            webhook_sender.send(gv.config.logger_webhook, "_ _")
         except Exception:
             print("[ ERROR ] Failed to send newline to Discord webhook!")
 
@@ -247,7 +250,7 @@ handler.setFormatter(fmt)
 handler.setLevel(setLevelValue)
 _base_logger.addHandler(handler)
 
-if config.file_logging:
+if gv.config.file_logging:
     try:
         log_dir = Path(__file__).parent.parent / "logs"
         log_file_path = log_dir / f"debug-log-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.log"
@@ -311,7 +314,7 @@ class DiscordWebhookHandler(logging.Handler):
                 print(f"[ ERROR ] Discord webhook worker error: {e}")
 
     def emit(self, record: logging.LogRecord) -> None:
-        if record.levelno == logging.DEBUG and not config.debug_mode:
+        if record.levelno == logging.DEBUG and not gv.config.debug_mode:
             return
 
         try:
@@ -321,7 +324,7 @@ class DiscordWebhookHandler(logging.Handler):
 
             ping_content = ""
 
-            if config.ping_for_warnings:
+            if gv.config.ping_for_warnings:
                 if self.ping_webhook and record.levelno >= logging.WARNING:
                     ping_content = f"{self.ping_webhook} "
             else:
@@ -381,14 +384,28 @@ def _has_discord_handler(logr) -> bool:
     return False
 
 
-if config.logger_webhook and not _has_discord_handler(logger):
+if gv.config.logger_webhook and not _has_discord_handler(logger):
     try:
         discord_handler = DiscordWebhookHandler(
-            config.logger_webhook,
-            f"<@{str(config.logger_webhook_ping)}>" if config.logger_webhook_ping else None
+            gv.config.logger_webhook,
+            f"<@{str(gv.config.logger_webhook_ping)}>" if gv.config.logger_webhook_ping else None
         )
         discord_handler.setLevel(setLevelValue)
         logger.addHandler(discord_handler)
     except Exception:
         logger.error("Failed to add Discord webhook handler to logger!")
         pass
+
+
+class SillyCombinedHandlerThingy(logging.Handler):
+    def __init__(self, handlers: list[logging.Handler]) -> None:
+        super().__init__()
+        self.handlers = [handler for handler in handlers if handler is not None and handler is not self]
+
+    def emit(self, record):
+        for h in self.handlers:
+            if record.levelno >= h.level:
+                h.emit(record)
+
+
+silly_combined_handler_thingy = SillyCombinedHandlerThingy(logger.handlers)

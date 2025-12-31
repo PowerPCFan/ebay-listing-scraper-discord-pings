@@ -3,9 +3,8 @@ import base64
 import httpx
 from pathlib import Path
 from typing import Any, cast
-from . import global_vars
+from . import global_vars as gv
 from .logger import logger
-from .global_vars import config
 from .utils import iso_to_unix_timestamp
 from .enums import (
     Category, Categories, Price, Seller, Condition, BuyingOption,
@@ -13,7 +12,7 @@ from .enums import (
     MarketplaceID
 )
 
-if config.debug_mode:
+if gv.config.log_api_responses:
     import json
     from datetime import datetime
 else:
@@ -250,10 +249,7 @@ async def get_valid_token() -> str | None:
         return _token_cache
 
     try:
-        if not config.ebay_app_id or not config.ebay_cert_id:
-            raise ValueError("eBay App ID and Cert ID must be configured")
-
-        credentials = base64.b64encode(f"{config.ebay_app_id}:{config.ebay_cert_id}".encode()).decode()
+        credentials = base64.b64encode(f"{gv.config.ebay_app_id}:{gv.config.ebay_cert_id}".encode()).decode()
 
         client = await get_http_client()
         response = await client.post(
@@ -307,7 +303,7 @@ async def search_single_category(category_id: str, price_filter: str = "") -> li
             "category_ids": category_id,
             "filter": "buyingOptions:{FIXED_PRICE|AUCTION}" + price_filter,
             "sort": "newlyListed",
-            "limit": str(global_vars.limit)
+            "limit": str(gv.limit)
         }
 
         headers = {
@@ -317,11 +313,11 @@ async def search_single_category(category_id: str, price_filter: str = "") -> li
             "Accept": "application/json"
         }
 
-        global_vars.api_call_count += 1
+        gv.api_call_count += 1
         client = await get_http_client()
         response = await client.get(api_url, params=params, headers=headers)
 
-        if config.log_api_responses:
+        if gv.config.log_api_responses:
             assert json is not None
 
             parsed = response.json()

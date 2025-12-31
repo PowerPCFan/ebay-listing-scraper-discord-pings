@@ -1,8 +1,7 @@
 import asyncio
 from . import ebay_api
-from . import global_vars
+from . import global_vars as gv
 from .config_tools import PingConfig
-from .global_vars import config
 from .utils import (
     matches_pattern,
     is_globally_blocked,
@@ -11,103 +10,122 @@ from .utils import (
     evaluate_deal
 )
 from .logger import logger
-from .discord import print_new_listing
 from .seen_items import seen_db
 from .enums import BuyingOption, Match, DealRanges
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from .bot import EbayScraperBot
 
 
 exception_count = 0
 exceptions: list[str] = []
 
 
-async def match() -> None:
+async def match(bot: "EbayScraperBot") -> None:
     logger.info("Starting to monitor for new eBay listings...")
 
     while True:
         try:
-            all_categories = set()
-            ping_to_categories = {}
+            await match_single_cycle(bot)
 
-            for index, ping_config in enumerate(config.pings):
-                ping_to_categories[index] = ping_config.categories
-                all_categories.update(ping_config.categories)
+            logger.info("Polling interval complete.")
+            logger.debug(f"API calls made: {gv.api_call_count}")
+            gv.api_call_count = 0  # reset for next interval
+            logger.info(f"Waiting {gv.config.poll_interval_seconds} seconds until next poll...")
 
-            category_cache = {}
+            await asyncio.sleep(gv.config.poll_interval_seconds)
 
-            tasks = []
-            for category_id in all_categories:
-                logger.debug(f"Fetching listings for category: {category_id}")
-                task = ebay_api.search_single_category(category_id)
-                tasks.append(task)
+        except KeyboardInterrupt:
+            logger.info("Keyboard interrupt received. Exiting...")
+            raise
+        except Exception as e:
+            global exception_count, exceptions
 
-            results = await asyncio.gather(*tasks)
-
-            for category_id, items in zip(all_categories, results):
-                category_cache[category_id] = items
-                logger.debug(f"Cached {len(items)} items for category {category_id}")
-
-            logger.debug(
-                f"Fetched {len(all_categories)} unique categories for {len(config.pings)} pings"
-            )
-
-            for i, ping_config in enumerate(config.pings):
-                combined_items = {}
-
-                for category_id in ping_to_categories[i]:
-                    for item_data in category_cache.get(category_id, []):
-                        item_data: dict
-                        item_id = item_data.get('itemId', '')
-                        if item_id and item_id not in combined_items:
-                            combined_items[item_id] = item_data
-
-                items_list = list(combined_items.values())
-                logger.debug(f"Processing {len(items_list)} items for {ping_config.category_name}")
-
-                new_matches = 0
-                for item_data in items_list:
-                    item = ebay_api.EbayItem(item_data)
-
-                    if seen_db.is_seen(item.item_id):
-                        continue
-
-                    matches, min_price, max_price, deal_ranges = matches_ping_criteria(item, ping_config)
-                    if matches:
-                        logger.info(f"New matching listing: {item.title[:25]}... - ${item.price.value}")
-                        await print_new_listing(item, ping_config, evaluate_deal(
-                            item.price.value,
-                            min_price,
-                            max_price,
-                            deal_ranges
-                        ))
-                        seen_db.mark_seen(item.item_id, ping_config.category_name, item.title)
-                        new_matches += 1
-                        await asyncio.sleep(1)
-                    else:
-                        seen_db.mark_seen(item.item_id, ping_config.category_name, item.title)
-
-                if new_matches > 0:
-                    logger.info(
-                        f"Found {new_matches} new matching listings for {ping_config.category_name}"
-                    )
-                else:
-                    logger.debug(f"No new matches for {ping_config.category_name}")
-
-            logger.debug("Polling interval complete.")
-            logger.debug(f"API calls made: {global_vars.api_call_count}")
-            global_vars.api_call_count = 0  # reset for next interval
-            logger.debug(f"Waiting {config.poll_interval_seconds} seconds until next poll...")
-
-            await asyncio.sleep(config.poll_interval_seconds)
-        except Exception:
-            global exception_count
             exception_count += 1
 
-            if exception_count < 5:
-                logger.exception("Error in loop. Retrying in 20 seconds...")
-                await asyncio.sleep(20)
+            stack_trace = e.__repr__()
+            logger.exception(f"Exception #{exception_count} occurred in main loop")
+
+            if stack_trace not in exceptions:
+                exceptions.append(stack_trace)
+                logger.error(f"New Exception: {stack_trace}")
+
+            await asyncio.sleep(10)
+
+
+async def match_single_cycle(bot: "EbayScraperBot") -> None:
+    all_categories = set()
+    ping_to_categories = {}
+
+    for index, ping_config in enumerate(gv.config.pings):
+        ping_to_categories[index] = ping_config.categories
+        all_categories.update(ping_config.categories)
+
+    category_cache = {}
+
+    tasks = []
+    for category_id in all_categories:
+        logger.debug(f"Fetching listings for category: {category_id}")
+        task = ebay_api.search_single_category(category_id)
+        tasks.append(task)
+
+    results = await asyncio.gather(*tasks)
+
+    for category_id, items in zip(all_categories, results):
+        category_cache[category_id] = items
+        logger.debug(f"Cached {len(items)} items for category {category_id}")
+
+    logger.debug(
+        f"Fetched {len(all_categories)} unique categories for {len(gv.config.pings)} pings"
+    )
+
+    for i, ping_config in enumerate(gv.config.pings):
+        combined_items = {}
+
+        for category_id in ping_to_categories[i]:
+            for item_data in category_cache.get(category_id, []):
+                item_data: dict
+                item_id = item_data.get('itemId', '')
+                if item_id and item_id not in combined_items:
+                    combined_items[item_id] = item_data
+
+        items_list = list(combined_items.values())
+        logger.debug(f"Processing {len(items_list)} items for {ping_config.category_name}")
+
+        new_matches = 0
+        for item_data in items_list:
+            item = ebay_api.EbayItem(item_data)
+
+            if seen_db.is_seen(item.item_id):
+                continue
+
+            matches, min_price, max_price, deal_ranges = matches_ping_criteria(item, ping_config)
+            if matches:
+                logger.info(f"New matching listing: {item.title[:25]}... - ${item.price.value}")
+
+                deal = evaluate_deal(
+                    item.price.value,
+                    min_price,
+                    max_price,
+                    deal_ranges
+                )
+
+                await bot.send_listing_notification(item, ping_config, deal)
+
+                seen_db.mark_seen(item.item_id, ping_config.category_name, item.title)
+                new_matches += 1
+                await asyncio.sleep(1)
             else:
-                logger.critical("Repeated errors in loop. Check configuration and eBay API status.")
-                raise
+                seen_db.mark_seen(item.item_id, ping_config.category_name, item.title)
+
+        if new_matches > 0:
+            logger.info(
+                f"Found {new_matches} new matching listings for {ping_config.category_name}"
+            )
+        else:
+            logger.debug(f"No new matches for {ping_config.category_name}")
 
 
 def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> Match:
