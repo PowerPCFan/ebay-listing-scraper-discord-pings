@@ -8,7 +8,8 @@ from .enums import (
     ShippingOption,
     Emojis,
     Deal,
-    DealTuple
+    DealTuple,
+    DealRanges
 )
 
 
@@ -161,8 +162,20 @@ def get_ebay_seller_url(username: str | None) -> str:
     return f"https://www.ebay.com/sch/i.html?_ssn={username}"
 
 
-def evaluate_deal(price: float | None, min_price: float | None, max_price: float | None) -> DealTuple:
-    if min_price is None or max_price is None or price is None:
+def evaluate_deal(
+    price: float | None,
+    min_price: float | None,
+    max_price: float | None,
+    deal_ranges: DealRanges | None = None
+) -> DealTuple:
+    if price is None:
+        return Deal.UNKNOWN_DEAL
+
+    if deal_ranges is not None:
+        return deal_ranges.get_deal_type(price)
+
+    # fall back to old logic if deal ranges arent provided
+    if min_price is None or max_price is None:
         return Deal.UNKNOWN_DEAL
 
     if price < min_price or price > max_price:

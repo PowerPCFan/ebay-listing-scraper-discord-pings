@@ -13,7 +13,7 @@ from .utils import (
 from .logger import logger
 from .discord import print_new_listing
 from .seen_items import seen_db
-from .enums import BuyingOption, Match
+from .enums import BuyingOption, Match, DealRanges
 
 
 exception_count = 0
@@ -70,13 +70,14 @@ async def match() -> None:
                     if seen_db.is_seen(item.item_id):
                         continue
 
-                    matches, min_price, max_price = matches_ping_criteria(item, ping_config)
+                    matches, min_price, max_price, deal_ranges = matches_ping_criteria(item, ping_config)
                     if matches:
                         logger.info(f"New matching listing: {item.title[:25]}... - ${item.price.value}")
                         await print_new_listing(item, ping_config, evaluate_deal(
                             item.price.value,
                             min_price,
-                            max_price
+                            max_price,
+                            deal_ranges
                         ))
                         seen_db.mark_seen(item.item_id, ping_config.category_name, item.title)
                         new_matches += 1
@@ -112,15 +113,17 @@ async def match() -> None:
 def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> Match:
     title_lower = item.title.lower()
 
-    matches_keyword:     bool          = False  # noqa
-    matched_keyword:     str | None    = None   # noqa
-    matching_min_price:  float | None  = None   # noqa
-    matching_max_price:  float | None  = None   # noqa
+    matches_keyword:       bool               = False  # noqa
+    matched_keyword:       str | None         = None   # noqa
+    matching_min_price:    float | None       = None   # noqa
+    matching_max_price:    float | None       = None   # noqa
+    matching_deal_ranges:  DealRanges | None  = None   # noqa
 
     for keyword_data in ping_config.keywords:
         keyword = keyword_data.keyword
         min_price = keyword_data.min_price
         max_price = keyword_data.max_price
+        deal_ranges = keyword_data.deal_ranges
 
         if matches_pattern(title_lower, keyword):
             try:
@@ -139,27 +142,33 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             matched_keyword = keyword
             matching_min_price = min_price
             matching_max_price = max_price
+            matching_deal_ranges = deal_ranges
             break
 
     if not matches_keyword:
         logger.debug(f"Item rejected: no keyword match for '{item.title[:30]}...'")
-        return Match(is_match=False, min_price=None, max_price=None)
+        return Match(is_match=False, min_price=None, max_price=None, deal_ranges=None)
 
     logger.debug(f"Item matched keyword '{matched_keyword}': {item.title[:30]}...")
 
     for exclude_keyword in ping_config.exclude_keywords:
         if matches_pattern(title_lower, exclude_keyword):
-            return Match(is_match=False, min_price=None, max_price=None)
+            return Match(is_match=False, min_price=None, max_price=None, deal_ranges=None)
 
     if is_globally_blocked(title_lower, "", ""):
         if not matches_blocklist_override(title_lower, "", "", ping_config.blocklist_override):
-            return Match(is_match=False, min_price=None, max_price=None)
+            return Match(is_match=False, min_price=None, max_price=None, deal_ranges=None)
 
     if is_seller_blocked(item.seller.username):
         logger.debug(f"Item rejected: seller '{item.seller.username}' is blocklisted")
-        return Match(is_match=False, min_price=None, max_price=None)
+        return Match(is_match=False, min_price=None, max_price=None, deal_ranges=None)
 
     if BuyingOption.FIXED_PRICE not in item.buying_options:
-        return Match(is_match=False, min_price=None, max_price=None)
+        return Match(is_match=False, min_price=None, max_price=None, deal_ranges=None)
 
-    return Match(is_match=True, min_price=matching_min_price, max_price=matching_max_price)
+    return Match(
+        is_match=True,
+        min_price=matching_min_price,
+        max_price=matching_max_price,
+        deal_ranges=matching_deal_ranges
+    )

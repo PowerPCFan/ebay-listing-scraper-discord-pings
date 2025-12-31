@@ -1,6 +1,7 @@
 import json
 import os
 from dataclasses import dataclass, field
+from .enums import PriceRange, DealRanges
 
 CONFIG_JSON = "config.json"
 
@@ -10,6 +11,7 @@ class Keyword:
     keyword: str
     min_price: int | None = None
     max_price: int | None = None
+    deal_ranges: DealRanges | None = None
 
 
 type Keywords = list[Keyword]
@@ -64,7 +66,17 @@ class Config:
             if ping_data.get("keywords") and isinstance(ping_data["keywords"], list):
                 keywords = []
                 for kw_data in ping_data["keywords"]:
-                    keywords.append(Keyword(**kw_data))
+                    deal_ranges = None
+                    if any(key in kw_data for key in ["fire_deal", "great_deal", "good_deal", "ok_deal"]):
+                        deal_ranges = DealRanges(
+                            fire_deal=PriceRange(**kw_data.pop("fire_deal", {"start": 0, "end": 0})),
+                            great_deal=PriceRange(**kw_data.pop("great_deal", {"start": 0, "end": 0})),
+                            good_deal=PriceRange(**kw_data.pop("good_deal", {"start": 0, "end": 0})),
+                            ok_deal=PriceRange(**kw_data.pop("ok_deal", {"start": 0, "end": 0}))
+                        )
+
+                    keyword = Keyword(deal_ranges=deal_ranges, **kw_data)
+                    keywords.append(keyword)
                 ping_data["keywords"] = keywords
 
             pings.append(PingConfig(**ping_data))

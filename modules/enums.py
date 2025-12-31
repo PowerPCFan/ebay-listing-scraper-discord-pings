@@ -1,5 +1,37 @@
 from enum import Enum
 from typing import NamedTuple
+from dataclasses import dataclass
+
+
+@dataclass
+class PriceRange:
+    start: float
+    end: float
+
+    def contains(self, price: float) -> bool:
+        # check if a price falls within the range
+        return self.start <= price <= self.end
+
+
+@dataclass
+class DealRanges:
+    fire_deal: PriceRange
+    great_deal: PriceRange
+    good_deal: PriceRange
+    ok_deal: PriceRange
+
+    def get_deal_type(self, price: float) -> 'DealTuple':
+        # determine deal based on price
+        if self.fire_deal.contains(price):
+            return Deal.FIRE_DEAL
+        elif self.great_deal.contains(price):
+            return Deal.GREAT_DEAL
+        elif self.good_deal.contains(price):
+            return Deal.GOOD_DEAL
+        elif self.ok_deal.contains(price):
+            return Deal.OK_DEAL
+        else:
+            return Deal.UNKNOWN_DEAL
 
 
 class Category(NamedTuple):
@@ -83,6 +115,7 @@ class Match(NamedTuple):
     is_match: bool
     min_price: float | None
     max_price: float | None
+    deal_ranges: DealRanges | None
 
 
 class Emojis:
