@@ -156,7 +156,7 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             return Match(is_match=False, min_price=None, max_price=None, deal_ranges=None)
 
     if is_globally_blocked(title_lower, "", ""):
-        if not matches_blocklist_override(title_lower, "", "", ping_config.blocklist_override):
+        if not matches_blocklist_override(title_lower, override_patterns=ping_config.blocklist_override):
             return Match(is_match=False, min_price=None, max_price=None, deal_ranges=None)
 
     if is_seller_blocked(item.seller.username):
