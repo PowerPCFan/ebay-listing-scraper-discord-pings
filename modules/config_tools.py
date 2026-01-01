@@ -1,9 +1,16 @@
 import json5
-import os
+from pathlib import Path
 from dataclasses import dataclass, field
 from .enums import PriceRange, DealRanges
 
-CONFIG_JSON = "config.json"
+
+CONFIG_JSON_POSSIBLE = ["config.json", "config.jsonc", "config.json5"]
+CONFIG_JSON = None
+for filename in CONFIG_JSON_POSSIBLE:
+    path = Path(__file__).parent.parent / filename
+    if path.exists():
+        CONFIG_JSON = path
+        break
 
 
 @dataclass
@@ -70,8 +77,10 @@ class Config:
 
     @staticmethod
     def load() -> "Config":
-        if not os.path.exists(CONFIG_JSON):
-            raise FileNotFoundError(f"Error: {CONFIG_JSON} not found.")
+        if CONFIG_JSON is None:
+            raise FileNotFoundError(
+                "No config file found. Please create a config.json, config.jsonc, or config.json5 file."
+            )
 
         with open(CONFIG_JSON) as f:
             data = json5.load(f)
