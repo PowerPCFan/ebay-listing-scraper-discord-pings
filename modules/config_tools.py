@@ -1,4 +1,4 @@
-import json
+import json5
 import os
 from dataclasses import dataclass, field
 from .enums import PriceRange, DealRanges
@@ -74,7 +74,7 @@ class Config:
             raise FileNotFoundError(f"Error: {CONFIG_JSON} not found.")
 
         with open(CONFIG_JSON) as f:
-            data = json.load(f)
+            data = json5.load(f)
 
         pings_data = data.pop("pings", [])
         self_roles_data = data.pop("self_roles", [])
@@ -86,12 +86,13 @@ class Config:
                 keywords = []
                 for kw_data in ping_data["keywords"]:
                     deal_ranges = None
-                    if any(key in kw_data for key in ["fire_deal", "great_deal", "good_deal", "ok_deal"]):
+                    if "deal_ranges" in kw_data:
+                        deal_ranges_data = kw_data.pop("deal_ranges")
                         deal_ranges = DealRanges(
-                            fire_deal=PriceRange(**kw_data.pop("fire_deal", {"start": 0, "end": 0})),
-                            great_deal=PriceRange(**kw_data.pop("great_deal", {"start": 0, "end": 0})),
-                            good_deal=PriceRange(**kw_data.pop("good_deal", {"start": 0, "end": 0})),
-                            ok_deal=PriceRange(**kw_data.pop("ok_deal", {"start": 0, "end": 0}))
+                            fire_deal=PriceRange(**deal_ranges_data.get("fire_deal", {"start": 0, "end": 0})),
+                            great_deal=PriceRange(**deal_ranges_data.get("great_deal", {"start": 0, "end": 0})),
+                            good_deal=PriceRange(**deal_ranges_data.get("good_deal", {"start": 0, "end": 0})),
+                            ok_deal=PriceRange(**deal_ranges_data.get("ok_deal", {"start": 0, "end": 0}))
                         )
 
                     keyword = Keyword(deal_ranges=deal_ranges, **kw_data)
