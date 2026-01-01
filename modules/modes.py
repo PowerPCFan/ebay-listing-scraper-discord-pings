@@ -33,6 +33,13 @@ async def match(bot: "EbayScraperBot") -> None:
             logger.info("Polling interval complete.")
             logger.debug(f"API calls made: {gv.api_call_count}")
             gv.api_call_count = 0  # reset for next interval
+
+            if gv.scraper_paused:
+                logger.info("Scraper is paused. Waiting for resume command...")
+                while gv.scraper_paused:
+                    await asyncio.sleep(1)
+                logger.info("Scraper resumed!")
+
             logger.info(f"Waiting {gv.config.poll_interval_seconds} seconds until next poll...")
 
             await asyncio.sleep(gv.config.poll_interval_seconds)
@@ -103,7 +110,7 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
 
             matches, min_price, max_price, deal_ranges = matches_ping_criteria(item, ping_config)
             if matches:
-                logger.info(f"New matching listing: {item.title[:25]}... - ${item.price.value}")
+                logger.info(f"New matching listing: {item.title}... - ${item.price.value}")
 
                 deal = evaluate_deal(
                     item.price.value,
@@ -164,10 +171,10 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             break
 
     if not matches_keyword:
-        logger.debug(f"Item rejected: no keyword match for '{item.title[:30]}...'")
+        logger.debug(f"Item rejected: no keyword match for '{item.title}...'")
         return Match(is_match=False, min_price=None, max_price=None, deal_ranges=None)
 
-    logger.debug(f"Item matched keyword '{matched_keyword}': {item.title[:30]}...")
+    logger.debug(f"Item matched keyword '{matched_keyword}': {item.title}...")
 
     for exclude_keyword in ping_config.exclude_keywords:
         if matches_pattern(title_lower, exclude_keyword):

@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
-import os
 import sys
-import signal
 import asyncio
 import modules.ebay_api as ebay_api
 from modules import global_vars as gv
@@ -10,6 +8,7 @@ from modules.config_tools import reload_config
 from modules.logger import logger
 from modules.bot import bot as discord_bot
 from typing import Callable, Coroutine, Any
+from modules.utils import sigint_current_process
 
 
 async def command_listener() -> None:
@@ -22,7 +21,7 @@ async def command_listener() -> None:
 
     def _exit() -> None:
         logger.info("Exiting application.")
-        os.kill(os.getpid(), signal.SIGINT)
+        sigint_current_process()
 
     async def _start() -> None:
         if not gv.config.start_on_command:

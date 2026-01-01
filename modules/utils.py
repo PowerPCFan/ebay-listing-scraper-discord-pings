@@ -1,3 +1,5 @@
+import os
+import signal
 import re as regexp
 from datetime import datetime, timezone
 from . import global_vars as gv
@@ -135,7 +137,8 @@ def build_shipping_embed_value(shipping: ShippingOption | None) -> str:
         # max_ts = create_discord_timestamp((shipping.max_estimated_delivery_date or 0), suffix='D')
         min_ts = create_discord_timestamp((shipping.min_estimated_delivery_date or 0), suffix='d')
         max_ts = create_discord_timestamp((shipping.max_estimated_delivery_date or 0), suffix='d')
-        arrival_info = f"\nArrival Date: {min_ts} to {max_ts}"
+        # arrival_info = f"\nArrival Date: {min_ts} to {max_ts}"
+        arrival_info = f"\nArrives by {max_ts}"
 
     return shipping_cost + arrival_info
 
@@ -205,3 +208,7 @@ def evaluate_deal(
         return Deal.OK_DEAL
     else:
         return Deal.UNKNOWN_DEAL
+
+
+def sigint_current_process() -> None:
+    os.kill(os.getpid(), signal.SIGINT)

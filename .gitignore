@@ -11,3 +11,4 @@ data/
 *.log
 response-*.json
 responses/
+pickers.txt

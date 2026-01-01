@@ -14,6 +14,18 @@ class Keyword:
     deal_ranges: DealRanges | None = None
 
 
+@dataclass
+class SelfRole:
+    name: str
+    id: int
+
+
+@dataclass
+class SelfRoleGroup:
+    title: str
+    roles: list[SelfRole] = field(default_factory=list)
+
+
 type Keywords = list[Keyword]
 
 
@@ -24,6 +36,7 @@ class PingConfig:
     keywords: Keywords
     channel_id: int
     role: int
+    price_ranges_last_updated: str = "1970-01-01T00:00:00.000+00:00"
     exclude_keywords: list[str] = field(default_factory=list)
     blocklist_override: list[str] = field(default_factory=list)
 
@@ -50,6 +63,7 @@ class Config:
     seller_blocklist: list[str]
 
     pings: list[PingConfig]
+    self_roles: list[SelfRoleGroup] = field(default_factory=list)
 
     logger_webhook: str | None = None
     logger_webhook_ping: int | None = None
@@ -63,7 +77,9 @@ class Config:
             data = json.load(f)
 
         pings_data = data.pop("pings", [])
+        self_roles_data = data.pop("self_roles", [])
         pings: list[PingConfig] = []
+        self_roles: list[SelfRoleGroup] = []
 
         for ping_data in pings_data:
             if ping_data.get("keywords") and isinstance(ping_data["keywords"], list):
@@ -84,7 +100,18 @@ class Config:
 
             pings.append(PingConfig(**ping_data))
 
-        return Config(pings=pings, **data)
+        for group_data in self_roles_data:
+            roles = []
+            for role_data in group_data.get("roles", []):
+                roles.append(SelfRole(**role_data))
+            if len(roles) > 25:
+                raise ValueError("A self-role group cannot have more than 25 roles due to Discord limitations.")
+            self_roles.append(SelfRoleGroup(
+                title=group_data["title"],
+                roles=roles
+            ))
+
+        return Config(pings=pings, self_roles=self_roles, **data)
 
 
 def reload_config() -> Config:
