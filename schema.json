@@ -1,0 +1,150 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Config",
+    "type": "object",
+    "properties": {
+        "debug_mode": { "type": "boolean" },
+        "log_api_responses": { "type": "boolean" },
+        "file_logging": { "type": "boolean" },
+        "ping_for_warnings": { "type": "boolean" },
+        "start_on_command": { "type": "boolean" },
+        "bot_debug_commands": { "type": "boolean" },
+        "poll_interval_seconds": { "type": "integer", "minimum": 0 },
+
+        "ebay_app_id": { "type": "string" },
+        "ebay_cert_id": { "type": "string" },
+        "ebay_dev_id": { "type": "string" },
+
+        "discord_bot_token": { "type": "string" },
+        "discord_guild_id": { "type": "integer" },
+
+        "global_blocklist": {
+            "type": "array",
+            "items": { "type": "string" }
+        },
+        "seller_blocklist": {
+            "type": "array",
+            "items": { "type": "string" }
+        },
+
+        "logger_webhook": { "type": ["string", "null"] },
+        "logger_webhook_ping": { "type": ["integer", "null"] },
+
+        "pings": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "category_name": { "type": "string" },
+                    "categories": {
+                        "type": "array",
+                        "items": { "type": "integer" }
+                    },
+                    "keywords": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "keyword": { "type": "string" },
+                                "min_price": { "type": ["integer", "null"] },
+                                "max_price": { "type": ["integer", "null"] },
+                                "deal_ranges": {
+                                    "type": ["object", "null"],
+                                    "properties": {
+                                        "fire_deal": {
+                                            "type": "object",
+                                            "properties": {
+                                                "start": { "type": "integer" },
+                                                "end": { "type": "integer" }
+                                            },
+                                            "required": ["start", "end"]
+                                        },
+                                        "great_deal": {
+                                            "type": "object",
+                                            "properties": {
+                                                "start": { "type": "integer" },
+                                                "end": { "type": "integer" }
+                                            },
+                                            "required": ["start", "end"]
+                                        },
+                                        "good_deal": {
+                                            "type": "object",
+                                            "properties": {
+                                                "start": { "type": "integer" },
+                                                "end": { "type": "integer" }
+                                            },
+                                            "required": ["start", "end"]
+                                        },
+                                        "ok_deal": {
+                                            "type": "object",
+                                            "properties": {
+                                                "start": { "type": "integer" },
+                                                "end": { "type": "integer" }
+                                            },
+                                            "required": ["start", "end"]
+                                        }
+                                    },
+                                    "required": ["fire_deal", "great_deal", "good_deal", "ok_deal"]
+                                }
+                            },
+                            "required": ["keyword"]
+                        }
+                    },
+                    "channel_id": { "type": "integer" },
+                    "role": { "type": "integer" },
+                    "price_ranges_last_updated": { "type": "string", "format": "date-time" },
+                    "exclude_keywords": {
+                        "type": "array",
+                        "items": { "type": "string" }
+                    },
+                    "blocklist_override": {
+                        "type": "array",
+                        "items": { "type": "string" }
+                    }
+                },
+                "required": ["category_name", "categories", "keywords", "channel_id", "role"]
+            }
+        },
+
+        "self_roles": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string" },
+                    "roles": {
+                        "type": "array",
+                        "maxItems": 25,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": { "type": "string" },
+                                "id": { "type": "integer" }
+                            },
+                            "required": ["name", "id"]
+                        }
+                    }
+                },
+                "required": ["title", "roles"]
+            }
+        }
+
+    },
+    "required": [
+        "debug_mode",
+        "log_api_responses",
+        "file_logging",
+        "ping_for_warnings",
+        "start_on_command",
+        "bot_debug_commands",
+        "poll_interval_seconds",
+        "ebay_app_id",
+        "ebay_cert_id",
+        "ebay_dev_id",
+        "discord_bot_token",
+        "discord_guild_id",
+        "global_blocklist",
+        "seller_blocklist",
+        "pings"
+    ]
+}

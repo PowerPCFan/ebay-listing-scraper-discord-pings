@@ -54,6 +54,11 @@ class EbayScraperBot(commands.Bot):
             discord_logger.addHandler(handler)
         discord_logger.setLevel(setLevelValue)
 
+        # i'm not using the voice version of discord.py and i'm also not using VoiceClient
+        # but for some reason it's still yelling at me in logs
+        # which is why this line exists
+        discord.VoiceClient.warn_nacl = False
+
         super().__init__(
             command_prefix="e!",
             intents=intents,
