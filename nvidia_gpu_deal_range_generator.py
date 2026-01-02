@@ -172,11 +172,30 @@ def main(
         _super = supers[0]
         vram = vrams[0]
         target_price = target_prices[0]
-        output_lines[1] = output_lines[1] + f"  // {model}{' non-Ti' if not ti and not _super else (' Ti' if not _super else '')} {'SUPER' if _super else ''}{' ' + str(vram) + 'GB' if vram is not None else ''} (Target Price ${target_price})"  # noqa: E501
+        for i, line in enumerate(output_lines):
+            if '"keyword":' in line:
+                output_lines[i] = line + f"  // {model}{' Ti' if ti else ''}{' SUPER' if _super else ''}{' ' + str(vram) + 'GB' if vram is not None else ''} (Target Price ${target_price})"
+                break
+
         output = "\n".join(output_lines)
         print(output)
     else:
-        print(json.dumps(results, indent=4))
+        output = json.dumps(results, indent=4)
+        lines = output.splitlines()
+
+        result_index = 0
+        for i, line in enumerate(lines):
+            if '"keyword":' in line and result_index < len(models):
+                model = models[result_index]
+                ti = tis[result_index]
+                _super = supers[result_index]
+                vram = vrams[result_index]
+                target_price = target_prices[result_index]
+                comment = f"  // {model}{' Ti' if ti else ''}{' SUPER' if _super else ''}{' ' + str(vram) + 'GB' if vram is not None else ''} (Target Price ${target_price})"
+                lines[i] = line + comment
+                result_index += 1
+
+        print("\n".join(lines))
 
 
 if __name__ == "__main__":
