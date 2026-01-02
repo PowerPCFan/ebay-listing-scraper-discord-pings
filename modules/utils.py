@@ -22,7 +22,13 @@ def matches_pattern(text: str, pattern: str, regex_prefix: str = 'regexp::') -> 
         length = len(regex_prefix)
         regex_pattern = pattern[length:]
         try:
-            return bool(regexp.search(regex_pattern, text_lower, regexp.IGNORECASE))
+            # return bool(regexp.search(regex_pattern, text_lower, regexp.IGNORECASE))
+            matches = regexp.findall(
+                pattern=regex_pattern,
+                string=text_lower,
+                flags=regexp.IGNORECASE
+            )
+            return bool(matches)
         except regexp.error:
             return regex_pattern.lower() in text_lower
     else:
