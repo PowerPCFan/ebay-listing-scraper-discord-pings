@@ -18,6 +18,7 @@ def generate_keyword_block(
     _super: bool,
     vram: int | None,
     min_price: int,
+    max_price: int | None,
     target_price: int
 ) -> dict[str, Any]:
     if ti and _super:
@@ -33,9 +34,13 @@ def generate_keyword_block(
     else:
         raise ValueError("Invalid combination of Ti, SUPER, and VRAM parameters. (Note: VRAM can only be specified for non-Ti, non-SUPER models)")  # noqa: E501
 
+    if max_price is not None:
+        print("Warning: Using --max-price is discouraged as it bypasses the dynamic max price calculation.")
+    else:
+        max_price = target_price + 25 if (target_price // 20) > 25 else target_price + (target_price // 20)
+
     great_end = target_price - 1
     fire_start = min_price
-    max_price = target_price + 25 if (target_price // 20) > 25 else target_price + (target_price // 20)
     ok_end = max_price
     great_start = target_price - 10
     fire_end = great_start - 1
@@ -56,68 +61,154 @@ def generate_keyword_block(
     }
 
 
+def parse_comma_separated(value, param_type):
+    """Parse comma-separated values and convert to appropriate types"""
+    if value is None:
+        return None
+    
+    items = [item.strip() for item in value.split(',')]
+    
+    if param_type == 'bool':
+        return [item.lower() in ('true', 't', 'yes', 'y', '1') for item in items]
+    elif param_type == 'int':
+        return [int(item) if item else None for item in items]
+    elif param_type == 'str':
+        return items
+    else:
+        return items
+
+
 def main(
-    model: str | None,
-    ti: bool | None,
-    _super: bool | None,
-    vram: int | None,
-    min_price: int | None,
-    target_price: int | None
+    models: list[str] | None,
+    tis: list[bool] | None,
+    supers: list[bool] | None,
+    vrams: list[int | None] | None,
+    min_prices: list[int] | None,
+    max_prices: list[int | None] | None,
+    target_prices: list[int] | None
 ):
-    if model is None:
+    if models and not isinstance(models, list):
+        models = [models]
+    if tis and not isinstance(tis, list):
+        tis = [tis]
+    if supers and not isinstance(supers, list):
+        supers = [supers]
+    if vrams and not isinstance(vrams, list):
+        vrams = [vrams]
+    if min_prices and not isinstance(min_prices, list):
+        min_prices = [min_prices]
+    if max_prices and not isinstance(max_prices, list):
+        max_prices = [max_prices]
+    if target_prices and not isinstance(target_prices, list):
+        target_prices = [target_prices]
+
+    if models is None:
         model = input("GPU Model (e.g., 3080, 3090): ").strip()
+        models = [model]
 
-    if ti is None:
-        ti_raw = (input("Ti GPU? [y/N]: ").strip().lower() or "n")
-        if ti_raw not in ("y", "n"):
-            raise ValueError("Invalid input for Ti or Non-Ti.")
-        ti = True if ti_raw == "y" else False
+    num_configs = len(models)
 
-    if _super is None:
-        super_raw = (input("SUPER GPU? [y/N]: ").strip().lower() or "n")
-        if super_raw not in ("y", "n"):
-            raise ValueError("Invalid input for Ti or Non-Ti.")
-        _super = True if super_raw == "y" else False
+    if tis is None:
+        if num_configs == 1:
+            ti_raw = (input("Ti GPU? [y/N]: ").strip().lower() or "n")
+            tis = [True if ti_raw == "y" else False]
+        else:
+            tis = [False] * num_configs
 
-    if min_price is None:
-        min_price = int(input("Min Price: ").strip())
+    if supers is None:
+        if num_configs == 1:
+            super_raw = (input("SUPER GPU? [y/N]: ").strip().lower() or "n")
+            supers = [True if super_raw == "y" else False]
+        else:
+            supers = [False] * num_configs
 
-    if target_price is None:
-        target_price = int(input("Target Price: ").strip())
+    if min_prices is None:
+        if num_configs == 1:
+            min_price = int(input("Min Price: ").strip())
+            min_prices = [min_price]
+        else:
+            raise ValueError("min_prices is required for batch processing")
 
-    if vram is None:
-        vram_input = input("VRAM in GB (e.g., 8, 10, 12) (Default: None - no VRAM requirement): ").strip()
-        vram = int(vram_input) if vram_input else None
+    if target_prices is None:
+        if num_configs == 1:
+            target_price = int(input("Target Price: ").strip())
+            target_prices = [target_price]
+        else:
+            raise ValueError("target_prices is required for batch processing")
 
-    block = generate_keyword_block(model, ti, _super, vram, min_price, target_price)
-    raw_output = textwrap.indent(text=json.dumps(block, indent=4), prefix="                ")
-    output_lines = raw_output.splitlines()
-    output_lines[1] = output_lines[1] + f"  // {model} {'non-Ti' if not ti else 'Ti'} (Target Price ${target_price})"
-    output = "\n".join(output_lines)
+    if vrams is None:
+        vrams = [None] * num_configs
 
-    print(output)
+    if max_prices is None:
+        max_prices = [None] * num_configs
+
+    def extend_list(lst, target_length, default_value):
+        if lst is None:
+            return [default_value] * target_length
+        while len(lst) < target_length:
+            lst.append(lst[-1] if lst else default_value)
+        return lst[:target_length]
+
+    tis = extend_list(tis, num_configs, False)
+    supers = extend_list(supers, num_configs, False)
+    vrams: list[int | None] | list[None] = extend_list(vrams, num_configs, None)
+    min_prices = extend_list(min_prices, num_configs, min_prices[0] if min_prices else 50)
+    max_prices: list[int | None] | list[None] = extend_list(max_prices, num_configs, None)
+    target_prices = extend_list(target_prices, num_configs, target_prices[0] if target_prices else 100)
+
+    results = []
+    for i in range(num_configs):
+        block = generate_keyword_block(
+            models[i], tis[i], supers[i], vrams[i], 
+            min_prices[i], max_prices[i], target_prices[i]
+        )
+        results.append(block)
+
+    if len(results) == 1:
+        raw_output = textwrap.indent(text=json.dumps(results[0], indent=4), prefix="                ")
+        output_lines = raw_output.splitlines()
+        model = models[0]
+        ti = tis[0]
+        _super = supers[0]
+        vram = vrams[0]
+        target_price = target_prices[0]
+        output_lines[1] = output_lines[1] + f"  // {model}{' non-Ti' if not ti and not _super else (' Ti' if not _super else '')} {'SUPER' if _super else ''}{' ' + str(vram) + 'GB' if vram is not None else ''} (Target Price ${target_price})"  # noqa: E501
+        output = "\n".join(output_lines)
+        print(output)
+    else:
+        print(json.dumps(results, indent=4))
 
 
 if __name__ == "__main__":
     try:
         parser = argparse.ArgumentParser()
 
-        parser.add_argument("--model", type=str, help="GPU Model")
-        parser.add_argument("--ti", action="store_true", help="Flag for if the GPU is a Ti model or not")
-        parser.add_argument("--super", action="store_true", help="Flag for if the GPU is a SUPER model or not")
-        parser.add_argument("--vram", type=int, help="VRAM in GB")
-        parser.add_argument("--min-price", type=int, help="Minimum Price")
-        parser.add_argument("--target-price", type=int, help="Target Price")
+        parser.add_argument("--model", type=str, help="GPU Model(s) - comma separated (e.g., '3080,3090')")
+        parser.add_argument("--ti", type=str, help="Ti flags - comma separated (e.g., 'false,true')")
+        parser.add_argument("--super", type=str, help="SUPER flags - comma separated (e.g., 'false,true')")
+        parser.add_argument("--vram", type=str, help="VRAM in GB - comma separated (e.g., '8,12')")
+        parser.add_argument("--min-price", type=str, help="Minimum Price(s) - comma separated")
+        parser.add_argument("--max-price", type=str, help="Maximum Price(s) - comma separated")
+        parser.add_argument("--target-price", type=str, help="Target Price(s) - comma separated")
 
         args = parser.parse_args(sys.argv[1:])
 
+        models = parse_comma_separated(args.model, 'str')
+        tis = parse_comma_separated(args.ti, 'bool')
+        supers = parse_comma_separated(args.super, 'bool')
+        vrams = parse_comma_separated(args.vram, 'int')
+        min_prices = parse_comma_separated(args.min_price, 'int')
+        max_prices = parse_comma_separated(args.max_price, 'int')
+        target_prices = parse_comma_separated(args.target_price, 'int')
+
         main(
-            model=args.model or None,
-            ti=args.ti or False,
-            _super=args.super or False,
-            vram=args.vram or None,
-            min_price=args.min_price or None,
-            target_price=args.target_price or None
+            models=models,
+            tis=tis,
+            supers=supers,
+            vrams=vrams,
+            min_prices=min_prices,
+            max_prices=max_prices,
+            target_prices=target_prices
         )
     except Exception as e:
         print(f"Error: {e}")
