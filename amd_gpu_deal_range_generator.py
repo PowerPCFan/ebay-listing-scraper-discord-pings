@@ -5,34 +5,25 @@ import textwrap
 from typing import Any
 
 
-NORMAL_REGEX = "regexp::(?:\\b(?:RTX[\\s-]*)?{model}\\b(?![\\s-]*(?:Ti|SUPER)\\b))"
-TI_REGEX = "regexp::(?:\\b(?:RTX[\\s-]*)?{model}[\\s-]*Ti\\b(?![\\s-]*SUPER\\b))"
-SUPER_REGEX = "regexp::(?:\\b(?:RTX[\\s-]*)?{model}[\\s-]*SUPER\\b)"
-TI_SUPER_REGEX = "regexp::(?:\\b(?:RTX[\\s-]*)?{model}[\\s-]*Ti[\\s-]*SUPER\\b)"
-VRAM_SPECIFIC_REGEX = "regexp::(?:\\b(?:RTX[\\s-]*)?{model}\\b(?![\\s-]*(?:Ti|SUPER)\\b)[\\s-]+{vram_amt}\\s?GB\\b)"
+NORMAL_REGEX = "regexp::(?:\\b(?:RX[\\s-]*)?{model}\\b(?![\\s-]*(?:XT|XTX)\\b))"
+XT_REGEX = "regexp::(?:\\b(?:RX[\\s-]*)?{model}[\\s-]*XT\\b(?![\\s-]*XTX\\b))"
+XTX_REGEX = "regexp::(?:\\b(?:RX[\\s-]*)?{model}[\\s-]*XTX\\b)"
 
 
 def generate_keyword_block(
     model: str,
-    ti: bool,
-    _super: bool,
-    vram: int | None,
+    xt: bool,
+    xtx: bool,
     min_price: int,
     max_price: int | None,
     target_price: int
 ) -> dict[str, Any]:
-    if ti and _super:
-        regex = TI_SUPER_REGEX.format(model=model)
-    elif ti:
-        regex = TI_REGEX.format(model=model)
-    elif _super:
-        regex = SUPER_REGEX.format(model=model)
-    elif vram is not None:
-        regex = VRAM_SPECIFIC_REGEX.format(model=model, vram_amt=vram)
-    elif not ti and not _super and vram is None:
-        regex = NORMAL_REGEX.format(model=model)
+    if xt:
+        regex = XT_REGEX.format(model=model)
+    elif xtx:
+        regex = XTX_REGEX.format(model=model)
     else:
-        raise ValueError("Invalid combination of Ti, SUPER, and VRAM parameters. (Note: VRAM can only be specified for non-Ti, non-SUPER models)")  # noqa: E501
+        regex = NORMAL_REGEX.format(model=model)
 
     if max_price is not None:
         print("Warning: Using --max-price is discouraged as it bypasses the dynamic max price calculation.")
@@ -79,21 +70,18 @@ def parse_comma_separated(value, param_type):
 
 def main(
     models: list[str] | None,
-    tis: list[bool] | None,
-    supers: list[bool] | None,
-    _vrams: list[int | None] | None,
+    xts: list[bool] | None,
+    xtxs: list[bool] | None,
     min_prices: list[int] | None,
     _max_prices: list[int | None] | None,
     target_prices: list[int] | None
 ):
     if models and not isinstance(models, list):
         models = [models]
-    if tis and not isinstance(tis, list):
-        tis = [tis]
-    if supers and not isinstance(supers, list):
-        supers = [supers]
-    if _vrams and not isinstance(_vrams, list):
-        _vrams = [_vrams]
+    if xts and not isinstance(xts, list):
+        xts = [xts]
+    if xtxs and not isinstance(xtxs, list):
+        xtxs = [xtxs]
     if min_prices and not isinstance(min_prices, list):
         min_prices = [min_prices]
     if _max_prices and not isinstance(_max_prices, list):
@@ -102,24 +90,24 @@ def main(
         target_prices = [target_prices]
 
     if models is None:
-        model = input("GPU Model (e.g., 3080, 3090): ").strip()
+        model = input("GPU Model (e.g., 6600, 7900, 9070): ").strip()
         models = [model]
 
     num_configs = len(models)
 
-    if tis is None:
+    if xts is None:
         if num_configs == 1:
-            ti_raw = (input("Ti GPU? [y/N]: ").strip().lower() or "n")
-            tis = [True if ti_raw == "y" else False]
+            xt_raw = (input("xt GPU? [y/N]: ").strip().lower() or "n")
+            xts = [True if xt_raw == "y" else False]
         else:
-            tis = [False] * num_configs
+            xts = [False] * num_configs
 
-    if supers is None:
+    if xtxs is None:
         if num_configs == 1:
-            super_raw = (input("SUPER GPU? [y/N]: ").strip().lower() or "n")
-            supers = [True if super_raw == "y" else False]
+            xtx_raw = (input("xtx GPU? [y/N]: ").strip().lower() or "n")
+            xtxs = [True if xtx_raw == "y" else False]
         else:
-            supers = [False] * num_configs
+            xtxs = [False] * num_configs
 
     if min_prices is None:
         if num_configs == 1:
@@ -135,9 +123,6 @@ def main(
         else:
             raise ValueError("target_prices is required for batch processing")
 
-    if _vrams is None:
-        _vrams = [None] * num_configs  # type: ignore
-
     if _max_prices is None:
         _max_prices = [None] * num_configs  # type: ignore
 
@@ -148,9 +133,8 @@ def main(
             lst.append(lst[-1] if lst else default_value)
         return lst[:target_length]
 
-    tis = extend_list(tis, num_configs, False)
-    supers = extend_list(supers, num_configs, False)
-    vrams: list[int | None] | list[None] = extend_list(_vrams, num_configs, None)
+    xts = extend_list(xts, num_configs, False)
+    xtxs = extend_list(xtxs, num_configs, False)
     min_prices = extend_list(min_prices, num_configs, min_prices[0] if min_prices else 50)
     max_prices: list[int | None] | list[None] = extend_list(_max_prices, num_configs, None)
     target_prices = extend_list(target_prices, num_configs, target_prices[0] if target_prices else 100)
@@ -158,7 +142,7 @@ def main(
     results = []
     for i in range(num_configs):
         block = generate_keyword_block(
-            models[i], tis[i], supers[i], vrams[i],
+            models[i], xts[i], xtxs[i],
             min_prices[i], max_prices[i], target_prices[i]
         )
         results.append(block)
@@ -167,13 +151,12 @@ def main(
         raw_output = textwrap.indent(text=json.dumps(results[0], indent=4), prefix="                ")
         output_lines = raw_output.splitlines()
         model = models[0]
-        ti = tis[0]
-        _super = supers[0]
-        vram = vrams[0]
+        xt = xts[0]
+        _xtx = xtxs[0]
         target_price = target_prices[0]
         for i, line in enumerate(output_lines):
             if '"keyword":' in line:
-                output_lines[i] = line + f"  // {model}{' Ti' if ti else ''}{' SUPER' if _super else ''}{' ' + str(vram) + 'GB' if vram is not None else ''} (Target Price ${target_price})"  # noqa: E501
+                output_lines[i] = line + f"  // {model}{' XT' if xt else ''}{' XTX' if _xtx else ''} (Target Price ${target_price})"  # noqa: E501
                 break
 
         output = "\n".join(output_lines)
@@ -186,11 +169,10 @@ def main(
         for i, line in enumerate(lines):
             if '"keyword":' in line and result_index < len(models):
                 model = models[result_index]
-                ti = tis[result_index]
-                _super = supers[result_index]
-                vram = vrams[result_index]
+                xt = xts[result_index]
+                _xtx = xtxs[result_index]
                 target_price = target_prices[result_index]
-                comment = f"  // {model}{' Ti' if ti else ''}{' SUPER' if _super else ''}{' ' + str(vram) + 'GB' if vram is not None else ''} (Target Price ${target_price})"  # noqa: E501
+                comment = f"  // {model}{' XT' if xt else ''}{' XTX' if _xtx else ''} (Target Price ${target_price})"
                 lines[i] = line + comment
                 result_index += 1
 
@@ -201,10 +183,9 @@ if __name__ == "__main__":
     try:
         parser = argparse.ArgumentParser()
 
-        parser.add_argument("--model", type=str, help="GPU Model(s) - comma separated (e.g., '3080,3090')")
-        parser.add_argument("--ti", type=str, help="Ti flags - comma separated (e.g., 'false,true')")
-        parser.add_argument("--super", type=str, help="SUPER flags - comma separated (e.g., 'false,true')")
-        parser.add_argument("--vram", type=str, help="VRAM in GB - comma separated (e.g., '8,12')")
+        parser.add_argument("--model", type=str, help="GPU Model(s) - comma separated (e.g., '6600,7900,9070')")
+        parser.add_argument("--xt", type=str, help="XT flags - comma separated (e.g., 'false,true')")
+        parser.add_argument("--xtx", type=str, help="XTX flags - comma separated (e.g., 'false,true')")
         parser.add_argument("--min-price", type=str, help="Minimum Price(s) - comma separated")
         parser.add_argument("--max-price", type=str, help="Maximum Price(s) - comma separated")
         parser.add_argument("--target-price", type=str, help="Target Price(s) - comma separated")
@@ -212,18 +193,16 @@ if __name__ == "__main__":
         args = parser.parse_args(sys.argv[1:])
 
         models = parse_comma_separated(args.model, 'str')
-        tis = parse_comma_separated(args.ti, 'bool')
-        supers = parse_comma_separated(args.super, 'bool')
-        vrams = parse_comma_separated(args.vram, 'int')
+        xts = parse_comma_separated(args.xt, 'bool')
+        xtxs = parse_comma_separated(args.xtx, 'bool')
         min_prices = parse_comma_separated(args.min_price, 'int')
         max_prices = parse_comma_separated(args.max_price, 'int')
         target_prices = parse_comma_separated(args.target_price, 'int')
 
         main(
             models=models,  # type: ignore
-            tis=tis,  # type: ignore
-            supers=supers,  # type: ignore
-            _vrams=vrams,  # type: ignore
+            xts=xts,  # type: ignore
+            xtxs=xtxs,  # type: ignore
             min_prices=min_prices,  # type: ignore
             _max_prices=max_prices,  # type: ignore
             target_prices=target_prices  # type: ignore
