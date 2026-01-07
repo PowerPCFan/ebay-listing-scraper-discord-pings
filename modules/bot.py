@@ -1,25 +1,27 @@
 import asyncio
-import textwrap
 import logging
 import discord
-from discord import app_commands
+from datetime import datetime, timezone
 from discord.ext import commands
+from discord import app_commands
 from .logger import logger, setLevelValue
-from .config_tools import PingConfig, reload_config, SelfRoleGroup
+from .config_tools import PingConfig, reload_config, SelfRoleGroup, SelfRole
+from .rolepicker_config_tools import RolePickerRole, RolePickerState
 from .ebay_api import EbayItem
 from .enums import DealTuple, Emojis
 from . import global_vars as gv
 from . import ebay_api
 from . import modes
-from typing import cast
-from pathlib import Path
+from typing import cast, Literal
 from .utils import (
     create_discord_timestamp,
     format_price,
     get_ebay_seller_url,
     get_listing_type_display,
     build_shipping_embed_value,
-    sigint_current_process
+    sigint_current_process,
+    restart_current_process,
+    restart_current_process_2
 )
 
 
@@ -44,6 +46,7 @@ async def print_new_listing(item: EbayItem, ping_config: PingConfig, deal: DealT
 class EbayScraperBot(commands.Bot):
     def __init__(self):
         self._scraper_running = False
+        self._persistent_views: dict[int, dict] = {}
 
         intents = discord.Intents.default()
         intents.message_content = True
@@ -65,16 +68,11 @@ class EbayScraperBot(commands.Bot):
             help_command=None
         )
 
-        self.admin_list = "Error retrieving admins!"
+        self.admin_list: str | None = None
         self.notification_channels = {}
 
     async def on_ready(self) -> None:
         logger.info(f'Logged in as {self.user}')
-
-        await self.change_presence(activity=discord.Activity(
-            type=discord.ActivityType.custom,
-            name="test test test"
-        ))
 
         logger.info("Syncing command tree...")
 
@@ -82,13 +80,23 @@ class EbayScraperBot(commands.Bot):
         guild = self.get_guild(gv.config.discord_guild_id)
         if guild:
             await self.tree.sync(guild=guild)
-            admin_role = guild.get_role(1447247941889691872)
+            admin_role = guild.get_role(gv.config.admin_role_id)
             if admin_role:
                 admins = [member.mention for member in admin_role.members]
-                self.admin_list = ", ".join(admins) if admins else "No admins found!"
+                self.admin_list = ", ".join(admins) if admins else None
 
         # Sync globally just in case the guild sync doesn't work for whatever reason
         await self.tree.sync()
+
+        # Leave all servers except allowed ones in config
+        # to make sure people can't do things like force quit my bot with the admin commands
+        for guild in bot.guilds:
+            if guild.id != gv.config.discord_guild_id:
+                logger.warning(f"Bot was invited to an unauthorized guild, {guild.name} ({guild.id}). Leaving guild...")
+                await guild.leave()
+
+        # Set up persistent role pickers
+        await self.setup_persistent_role_pickers()
 
         logger.info("Bot ready! Starting eBay scraper...")
 
@@ -105,6 +113,84 @@ class EbayScraperBot(commands.Bot):
             await self.start_scraper()
         else:
             logger.info("Scraper ready but waiting for start command. Use /start (Discord) or :start (Terminal)")
+
+    async def setup_persistent_role_pickers(self):
+        logger.info("Setting up persistent role picker views...")
+
+        try:
+            gv.role_picker_states = gv.role_picker_states.load()
+            persistent_states = gv.role_picker_states.states
+
+            views_added = 0
+            invalid_roles = []
+
+            self._persistent_views.clear()
+
+            for state in persistent_states:
+                try:
+                    valid_roles = []
+                    for role_data in state.roles:
+                        guild = self.get_guild(gv.config.discord_guild_id)
+                        if guild and guild.get_role(role_data.id):
+                            valid_roles.append(SelfRole(name=role_data.name, id=role_data.id))
+                        else:
+                            invalid_roles.append(f"{role_data.name} (ID: {role_data.id})")
+
+                    if valid_roles:
+                        role_group = SelfRoleGroup(title=state.title, roles=valid_roles)
+                        view = SelfRoleView(role_group)
+
+                        for message_id in state.message_ids:
+                            self.add_view(view, message_id=message_id)
+                            self._persistent_views[message_id] = {
+                                'view': view,
+                                'role_group': role_group,
+                                'created_at': state.created_at
+                            }
+                        views_added += 1
+
+                except Exception as e:
+                    logger.error(f"Failed to restore role picker for {state.title}: {e}")
+
+            if invalid_roles:
+                logger.warning(f"Found {len(invalid_roles)} deleted/invalid roles: {', '.join(invalid_roles)}")
+
+            logger.info(f"Successfully restored {views_added} persistent role picker views")
+
+        except Exception as e:
+            logger.warning(f"Failed to load persistent role pickers: {e}. Creating fresh views from config...")
+            await self._fallback_to_config_views()
+
+    async def save_picker_state_from_messages(self, message_ids: list[int], role_groups: list[SelfRoleGroup]):
+        states = []
+        for i, role_group in enumerate(role_groups):
+            if i < len(message_ids):
+                roles = [RolePickerRole(name=role.name, id=role.id) for role in role_group.roles]
+                state = RolePickerState(
+                    title=role_group.title,
+                    roles=roles,
+                    message_ids=[message_ids[i]],
+                    created_at=datetime.now(tz=timezone.utc).isoformat()
+                )
+                states.append(state)
+
+        # Update global states and save
+        try:
+            gv.role_picker_states.states = states
+            gv.role_picker_states.save()
+            logger.info(f"Saved persistent state for {len(states)} role picker groups")
+        except Exception:
+            logger.exception("Failed to save role picker states:")
+
+    async def _fallback_to_config_views(self):
+        logger.info("Using fallback: creating views from current config...")
+
+        for role_group in gv.config.self_roles:
+            view = SelfRoleView(role_group)
+            self.add_view(view)
+            logger.debug(f"Added fallback view for role group: {role_group.title}")
+
+        logger.info(f"Created {len(gv.config.self_roles)} fallback role picker views")
 
     async def start_scraper(self) -> bool:
         if self._scraper_running:
@@ -136,8 +222,8 @@ class EbayScraperBot(commands.Bot):
             logger.debug(f"Sent Discord notification for {ping_config.category_name}")
         except discord.Forbidden:
             logger.error(f"No permission to send messages in channel {channel.name}")
-        except Exception as e:
-            logger.error(f"Error sending notification: {e}")
+        except Exception:
+            logger.exception("Error sending notification:")
 
     def create_listing_embed(
         self,
@@ -221,12 +307,15 @@ class SelfRoleView(discord.ui.View):
 
 class SelfRoleButton(discord.ui.Button):
     def __init__(self, role_name: str, role_id: int, index: int):
+        self.button_id = f"SelfRoleButton{role_id}"
         super().__init__(
             label=role_name,
             style=discord.ButtonStyle.secondary,
-            row=index // 5
+            row=index // 5,
+            custom_id=self.button_id
         )
-        self.role_id = role_id
+        self.role_id: int = role_id
+        self.role_name: str = role_name
 
     async def callback(self, interaction: discord.Interaction):
         guild = cast(discord.Guild, interaction.guild)
@@ -234,20 +323,44 @@ class SelfRoleButton(discord.ui.Button):
         role = guild.get_role(self.role_id)
         if not role:
             await interaction.response.send_message(
-                content=(
-                    f"Error retrieving role {self.role_id}."
-                    f"Please contact one of the following administrators: {bot.admin_list}"
+                embed=discord.Embed(
+                    title="Role Deleted",
+                    description=(
+                        f"The role `{self.role_name}` (ID: {self.role_id}) has been deleted from this server.\n",
+                        "Please contact one of the following administrators, "
+                        f"and provide them with a screenshot of this message: {bot.admin_list}"
+                    )
+                ),
+                ephemeral=True
+            )
+            logger.warning(f"Role picker button {self.button_id} tried to assign the deleted role {self.role_id} to user {interaction.user.id}")  # noqa: E501
+            return
+
+        try:
+            member = guild.get_member(interaction.user.id)
+            if not member:
+                member = await guild.fetch_member(interaction.user.id)
+        except discord.NotFound:
+            await interaction.response.send_message(
+                embed=discord.Embed(
+                    title="Account Not Found",
+                    description=(
+                        f"An account with user ID `{interaction.user.id}` was not found.\n"
+                        f"Please contact an admin for further assistance: {bot.admin_list}"
+                    )
                 ),
                 ephemeral=True
             )
             return
-
-        member = guild.get_member(interaction.user.id)
-        if not member:
+        except Exception:
+            logger.exception(f"Error fetching member {interaction.user.id}:")
             await interaction.response.send_message(
-                content=(
-                    f"I was unable to find an account with user ID {interaction.user.id}."
-                    f"Please contact an admin for further assistance: {bot.admin_list}"
+                embed=discord.Embed(
+                    title="Fetching Error",
+                    description=(
+                        f"An error occurred while fetching your account information. "
+                        f"Please contact an admin for further assistance: {bot.admin_list}"
+                    )
                 ),
                 ephemeral=True
             )
@@ -256,49 +369,97 @@ class SelfRoleButton(discord.ui.Button):
         try:
             if role in member.roles:
                 await member.remove_roles(role)
-                await interaction.response.send_message(f"Removed {role.mention}!", ephemeral=True)
+                await interaction.response.send_message(
+                    embed=discord.Embed(
+                        title="Role Removed",
+                        description=f"Successfully removed {role.mention} from {member.mention}!",
+                        color=discord.Color.red()
+                    ),
+                    ephemeral=True
+                )
+                logger.info(f"Removed role @{role.name} from user @{member.name}")
             else:
                 await member.add_roles(role)
-                await interaction.response.send_message(f"Added {role.mention}!", ephemeral=True)
+                await interaction.response.send_message(
+                    embed=discord.Embed(
+                        title="Role Added",
+                        description=f"Successfully added {role.mention} to {member.mention}!",
+                        color=discord.Color.green()
+                    ),
+                    ephemeral=True
+                )
+                logger.info(f"Added role @{role.name} to user @{member.name}")
         except discord.Forbidden:
             await interaction.response.send_message(
-                "Uh-oh, I don't have permission to manage your roles!",
+                embed=discord.Embed(
+                    title="Permissions Error",
+                    description=f"There was a permissions error when trying to add/remove the role {role.mention} to you ({member.mention}). "  # noqa: E501
+                ),
                 ephemeral=True
             )
         except Exception:
-            logger.exception(f"Error managing role {role.name} for user {interaction.user}:")
-            await interaction.response.send_message(f"An error occurred while managing your role. Please contact one of the following admins for assistance: {bot.admin_list}", ephemeral=True)  # noqa: E501
+            logger.exception(f"Error managing role {role.name} for user {member.name}:")
+            await interaction.response.send_message(
+                embed=discord.Embed(
+                    title="Unexpected Error",
+                    description=(
+                        "An error occurred while managing your role. "
+                        f"Please contact one of the following admins for assistance: {bot.admin_list}",
+                    )
+                ),
+                ephemeral=True
+            )
 
 
 def setup_commands(bot: EbayScraperBot):
     if gv.config.bot_debug_commands:
-        @bot.tree.command(name='reload-command', description="Reload a bot command")
-        @commands.has_permissions(administrator=True)
-        @app_commands.describe(command="The name of the command to reload")
-        async def reload_command(interaction: discord.Interaction, command: str) -> None:
+        @bot.tree.command(name='restart-bot', description="[WARNING: Very buggy!] Restart the bot")
+        @app_commands.describe(method="Method to use for restarting the bot. 'replace' replaces the process and 'spawn' starts a new one and then kills the current one.")  # noqa: E501
+        @commands.is_owner()
+        async def restart_bot_command(interaction: discord.Interaction, method: Literal["replace", "spawn"]) -> None:
             try:
-                await bot.unload_extension(f'commands.{command}')
-                await bot.load_extension(f'commands.{command}')
-                await interaction.response.send_message(
-                    content=f"Reloaded command: {command}",
-                    ephemeral=True
+                logger.info("Restarted bot via Discord")
+
+                embed = discord.Embed(
+                    title="Bot Restarting",
+                    description="The bot is restarting now...",
+                    color=discord.Color.orange()
                 )
-                logger.info(f"Reloaded command: {command} via Discord")
+
+                if method == "replace":
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    restart_current_process()
+                elif method == "spawn":
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    restart_current_process_2()
+                else:
+                    await interaction.response.send_message(
+                        embed=discord.Embed(
+                            title="Invalid Method",
+                            description="The specified restart method is invalid.",
+                            color=discord.Color.red()
+                        ),
+                        ephemeral=True
+                    )
             except Exception as e:
                 await interaction.response.send_message(
-                    content=f"Failed to reload commands.{command}: {str(e)}",
+                    embed=discord.Embed(
+                        title="Bot Restart Failed",
+                        description=f"Failed to restart: {type(e).__name__}",
+                        color=discord.Color.red()
+                    ),
                     ephemeral=True
                 )
-                logger.error(f"Failed to reload command: {command} via Discord: {e}")
+                logger.error(f"Failed to restart bot via Discord /restart-bot: {e}")
 
     @bot.tree.command(name='start', description="Start the eBay listing scraper (when in start_on_command mode)")
-    @commands.has_permissions(administrator=True)
+    @commands.is_owner()
     async def start_command(interaction: discord.Interaction):
         if not gv.config.start_on_command:
             embed = discord.Embed(
                 title="Cannot Start",
                 description="Scraper auto-starts when `start_on_command` is disabled in config.",
-                color=0xff0000,
+                color=discord.Color.red(),
                 timestamp=discord.utils.utcnow()
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -309,20 +470,20 @@ def setup_commands(bot: EbayScraperBot):
             embed = discord.Embed(
                 title="Scraper Started",
                 description="eBay listing scraper started successfully!",
-                color=0x00ff00,
+                color=discord.Color.green(),
                 timestamp=discord.utils.utcnow()
             )
         else:
             embed = discord.Embed(
                 title="Already Running",
                 description="Scraper is already running.",
-                color=0xffaa00,
+                color=discord.Color.orange(),
                 timestamp=discord.utils.utcnow()
             )
         await interaction.response.send_message(embed=embed)
 
     @bot.tree.command(name='reload-config', description="Reload the script's config.json file")
-    @commands.has_permissions(administrator=True)
+    @commands.is_owner()
     async def reload_config_command(interaction: discord.Interaction):
         try:
             gv.config = reload_config()
@@ -330,7 +491,7 @@ def setup_commands(bot: EbayScraperBot):
             embed = discord.Embed(
                 title="Configuration Reloaded",
                 description="Successfully reloaded configuration.",
-                color=0x00ff00,
+                color=discord.Color.green(),
                 timestamp=discord.utils.utcnow()
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -341,14 +502,14 @@ def setup_commands(bot: EbayScraperBot):
             embed = discord.Embed(
                 title="Configuration Reload Failed",
                 description=f"Error: {str(e)}",
-                color=0xff0000,
+                color=discord.Color.red(),
                 timestamp=discord.utils.utcnow()
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.error(f"Failed to reload config via Discord: {e}")
 
     @bot.tree.command(name='estimate-daily-api-calls', description="Estimate the number of eBay API calls made per day based on current config")  # noqa: E501
-    @commands.has_permissions(administrator=True)
+    @commands.is_owner()
     async def estimate_daily_api_calls_command(interaction: discord.Interaction):
         try:
             all_categories = set()
@@ -365,38 +526,52 @@ def setup_commands(bot: EbayScraperBot):
             minutes_between_polls = poll_interval_seconds / 60
             hours_between_polls = poll_interval_seconds / 3600
 
-            message = textwrap.dedent(f"""\
-                ## Stats
-                - **Polls per day:** {polls_per_day:.1f}
-                - **Minutes between polls:** {minutes_between_polls:.1f}
-                - **API calls per poll:** {unique_categories}
-                - **API calls per day:** {api_calls_per_day:.0f}
-            """)
+            embed = discord.Embed(
+                title="Stats",
+                color=discord.Color.blurple(),
+                timestamp=discord.utils.utcnow(),
+                description=(
+                    f"- **Polls per day:** {polls_per_day:.1f}\n"
+                    f"- **Minutes between polls:** {minutes_between_polls:.1f}\n"
+                    f"- **API calls per poll:** {unique_categories}\n"
+                    f"- **API calls per day:** {api_calls_per_day:.0f}"
+                )
+            )
 
             rate_limit = 5000
 
             if api_calls_per_day > rate_limit:
-                message += textwrap.dedent(f"""\
-                    ### ⚠️ Warning
-                    {api_calls_per_day:.0f} API calls per day exceeds eBay's rate limit of {rate_limit} calls/day.
-                    Consider increasing the poll interval or reducing the number of categories.
-                """)
+                embed.add_field(
+                    name="⚠️ Warning",
+                    value=(
+                        f"{api_calls_per_day:.0f} calls/day exceeds eBay's rate limit of {rate_limit} calls/day.\n"
+                        "Consider increasing the poll interval or reducing the number of categories."
+                    )
+                )
 
-            await interaction.response.send_message(content=message, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
 
         except Exception as e:
             await interaction.response.send_message(
-                content=f"Error calculating: {str(e)}",
-                ephemeral=True
+                embed=discord.Embed(
+                    title="Calculation Error",
+                    description=f"Error calculating daily API calls: {type(e).__name__}",
+                    color=discord.Color.red(),
+                    timestamp=discord.utils.utcnow()
+                )
             )
 
     @bot.tree.command(name='ping', description="Measure bot latency")
-    @commands.has_permissions(administrator=True)
     async def ping_command(interaction: discord.Interaction):
-        await interaction.response.send_message(f"Pong! Delay: {round(bot.latency * 1000)}ms", ephemeral=True)
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                title="Pong!",
+                description=f"Delay: {round(bot.latency * 1000)}ms"
+            )
+        )
 
     @bot.tree.command(name='config-summary', description="Create a summary of the bot's config.json")
-    @commands.has_permissions(administrator=True)
+    @commands.is_owner()
     async def config_command(interaction: discord.Interaction):
         try:
             config_summary = "## Config Summary\n\n"
@@ -456,69 +631,124 @@ def setup_commands(bot: EbayScraperBot):
 
         except Exception as e:
             await interaction.response.send_message(
-                content=f"Error retrieving config: {str(e)}",
+                embed=discord.Embed(
+                    title="Error",
+                    description=f"Error retrieving config: {type(e).__name__}",
+                    color=discord.Color.red(),
+                    timestamp=discord.utils.utcnow()
+                ),
                 ephemeral=True
             )
 
     @bot.tree.command(name='pause', description="Pause the eBay listing scraper at the end of the current interval")
-    @commands.has_permissions(administrator=True)
+    @commands.is_owner()
     async def pause_command(interaction: discord.Interaction):
         if gv.scraper_paused:
-            await interaction.response.send_message("Scraper is already paused.", ephemeral=True)
+            await interaction.response.send_message(
+                embed=discord.Embed(
+                    title="Scraper Already Paused",
+                    description="The scraper is already paused.",
+                    color=discord.Color.orange(),
+                    timestamp=discord.utils.utcnow()
+                ),
+                ephemeral=True
+            )
             return
 
         gv.scraper_paused = True
         embed = discord.Embed(
             title="Scraper Paused",
             description="The scraper will pause after the current polling interval ends. Use /resume to continue, and use /force-stop to immediately quit the bot and scraper. (This will require a manual restart!)",  # noqa: E501
-            color=0xffa500,
+            color=discord.Color.orange(),
             timestamp=discord.utils.utcnow()
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         logger.info("eBay scraper paused via Discord command")
 
     @bot.tree.command(name='resume', description="Resume the scraper (if it's paused)")
-    @commands.has_permissions(administrator=True)
+    @commands.is_owner()
     async def resume_command(interaction: discord.Interaction):
         if not gv.scraper_paused:
-            await interaction.response.send_message("Scraper is not paused.", ephemeral=True)
+            await interaction.response.send_message(
+                embed=discord.Embed(
+                    title="Scraper Not Paused",
+                    description="The scraper is not paused.",
+                    color=discord.Color.orange(),
+                    timestamp=discord.utils.utcnow()
+                ),
+                ephemeral=True
+            )
             return
 
         gv.scraper_paused = False
         embed = discord.Embed(
             title="Scraper Resumed",
             description="The scraper has been resumed.",
-            color=0x00ff00,
+            color=discord.Color.green(),
             timestamp=discord.utils.utcnow()
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         logger.info("eBay scraper resumed via Discord command")
 
-    @bot.tree.command(name='force-stop', description="Force quit the script (Dangerous!)")
-    @commands.has_permissions(administrator=True)
+    @bot.tree.command(name='force-stop', description="Force quit the script")
+    @commands.is_owner()
     async def force_stop_command(interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="Force Stop",
-            description="Forcing application shutdown...",
-            color=0xff0000,
-            timestamp=discord.utils.utcnow()
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        logger.warning("Force stop initiated via Discord command! If this was unintentional, there may be permissions issues with the force stop command.")  # noqa: E501
+        base_interaction = interaction
 
-        # kill after sending message
-        sigint_current_process()
+        view = discord.ui.View(timeout=120)
+
+        class ConfirmButton(discord.ui.Button):
+            def __init__(self):
+                super().__init__(label="Confirm", style=discord.ButtonStyle.danger)
+
+            async def callback(self, interaction: discord.Interaction):
+                await interaction.response.defer()
+                await base_interaction.edit_original_response(
+                    embed=discord.Embed(
+                        title="Force Stop",
+                        description="Forcing application shutdown...",
+                        color=discord.Color.red(),
+                        timestamp=discord.utils.utcnow()
+                    ),
+                    view=None
+                )
+
+                await asyncio.sleep(1.0)
+
+                await base_interaction.edit_original_response(
+                    embed=discord.Embed(
+                        title="Application Stopped",
+                        description="The application has been successfully stopped.",
+                        color=discord.Color.green(),
+                        timestamp=discord.utils.utcnow()
+                    ),
+                    view=None
+                )
+
+                logger.warning(f"Force stop initiated by {base_interaction.user} via Discord command! If this was unintentional, there may be permissions issues with the force stop command.")  # noqa: E501
+
+                sigint_current_process()
+
+        view.add_item(ConfirmButton())
+
+        await base_interaction.response.send_message(
+            embed=discord.Embed(
+                title="Confirm Force Stop",
+                description="Are you sure you want to force stop the application? This will immediately `SIGINT` the bot and scraper. Click the **Confirm** button below to proceed.",  # noqa: E501
+                color=discord.Color.red(),
+            ),
+            view=view,
+            ephemeral=True
+        )
 
     @bot.tree.command(name='generate-self-role-picker', description="Generate self role pickers in the current channel")
-    @commands.has_permissions(administrator=True)
-    async def generate_self_role_picker(interaction: discord.Interaction):
-        pickers_path = Path(__file__).parent.parent / "pickers.txt"
-        pickers_path.parent.mkdir(parents=True, exist_ok=True)
-        pickers_path.touch(exist_ok=True)
+    @commands.is_owner()
+    async def generate_self_role_picker_command(interaction: discord.Interaction):
+        gv.role_picker_states = gv.role_picker_states.load()
 
-        # load existing pickers to delete them before adding new ones
-        with open(pickers_path, "r", encoding="utf-8") as f:
-            old_picker_ids = [int(line) for line in f if line.strip()]
+        old_picker_ids = []
+        for state in gv.role_picker_states.states:
+            old_picker_ids.extend(state.message_ids)
 
         for picker_id in old_picker_ids:
             try:
@@ -532,7 +762,15 @@ def setup_commands(bot: EbayScraperBot):
         picker_ids = []
 
         if not gv.config.self_roles:
-            await interaction.response.send_message("No self role groups configured.", ephemeral=True)
+            await interaction.response.send_message(
+                embed=discord.Embed(
+                    title="No Self Role Groups Configured",
+                    description="There are no self role groups configured.",
+                    color=discord.Color.red(),
+                    timestamp=discord.utils.utcnow()
+                ),
+                ephemeral=True
+            )
             return
 
         for i, role_group in enumerate(gv.config.self_roles):
@@ -541,7 +779,7 @@ def setup_commands(bot: EbayScraperBot):
             embed = discord.Embed(
                 title=f"{role_group.title}",
                 description="Click the buttons below to add or remove roles.",
-                color=0x5865f2,
+                color=discord.Color.blurple(),
                 timestamp=discord.utils.utcnow()
             )
 
@@ -559,21 +797,17 @@ def setup_commands(bot: EbayScraperBot):
             picker_ids.append(msg.id)
             logger.info(f"Generated self role picker for group: {role_group.title}")
 
-        # overwrite file with new ids
-        with open(pickers_path, "w", encoding="utf-8") as f:
-            for pid in picker_ids:
-                f.write(f"{pid}\n")
+        await bot.save_picker_state_from_messages(picker_ids, gv.config.self_roles)
 
-        await interaction.response.send_message(content="Done!", ephemeral=True)
-
-    @bot.tree.command(name='help', description="Show the bot's help message")
-    async def help_command(interaction: discord.Interaction):
-        # auto-generate a bullet list of every command
-        msg = "# Commands\n\n"
-        for command in bot.tree.walk_commands():
-            msg += f"- /{command.name}{': ' + command.description if command.description else ''}\n"
-
-        await interaction.response.send_message(content=msg, ephemeral=True)
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                title="Pickers Generated",
+                description="Self role pickers have been successfully generated and sent in this channel.",
+                color=discord.Color.green(),
+                timestamp=discord.utils.utcnow()
+            ),
+            ephemeral=True
+        )
 
 
 bot = EbayScraperBot()

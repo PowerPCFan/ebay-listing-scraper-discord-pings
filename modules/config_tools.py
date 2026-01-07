@@ -65,6 +65,7 @@ class Config:
 
     discord_bot_token: str
     discord_guild_id: int
+    admin_role_id: int
 
     global_blocklist: list[str]
     seller_blocklist: list[str]
@@ -83,7 +84,9 @@ class Config:
             )
 
         with open(CONFIG_JSON) as f:
-            data = json5.load(f)
+            data: dict = json5.load(f)
+
+        data.pop("$schema", None)
 
         pings_data = data.pop("pings", [])
         self_roles_data = data.pop("self_roles", [])

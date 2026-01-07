@@ -7,7 +7,8 @@ from .utils import (
     is_globally_blocked,
     matches_blocklist_override,
     is_seller_blocked,
-    evaluate_deal
+    evaluate_deal,
+    change_status
 )
 from .logger import logger
 from .seen_items import seen_db
@@ -42,6 +43,8 @@ async def match(bot: "EbayScraperBot") -> None:
 
             logger.info(f"Waiting {gv.config.poll_interval_seconds} seconds until next poll...")
 
+            await change_status(bot=bot, logger=logger, status_message="Waiting for next scrape interval...")
+
             await asyncio.sleep(gv.config.poll_interval_seconds)
 
         except KeyboardInterrupt:
@@ -63,6 +66,8 @@ async def match(bot: "EbayScraperBot") -> None:
 
 
 async def match_single_cycle(bot: "EbayScraperBot") -> None:
+    await change_status(bot=bot, logger=logger, status_message="Scraping eBay...")
+
     all_categories = set()
     ping_to_categories = {}
 

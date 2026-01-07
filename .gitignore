@@ -12,3 +12,4 @@ data/
 response-*.json
 responses/
 pickers.txt
+picker_states.json

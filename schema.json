@@ -17,6 +17,7 @@
 
         "discord_bot_token": { "type": "string" },
         "discord_guild_id": { "type": "integer" },
+        "admin_role_id": { "type": "integer" },
 
         "global_blocklist": {
             "type": "array",

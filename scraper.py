@@ -2,6 +2,7 @@
 
 import sys
 import asyncio
+import inspect
 import modules.ebay_api as ebay_api
 from modules import global_vars as gv
 from modules.config_tools import reload_config
@@ -59,7 +60,7 @@ async def command_listener() -> None:
             for command, function in commands.items():
                 if stripped == command:
                     matched = True
-                    if asyncio.iscoroutinefunction(function):
+                    if inspect.iscoroutinefunction(function):
                         await function()
                     else:
                         function()
@@ -67,7 +68,7 @@ async def command_listener() -> None:
                 elif stripped.startswith(command + " "):
                     matched = True
                     args = stripped[(len(command) + 1):].split()
-                    if asyncio.iscoroutinefunction(function):
+                    if inspect.iscoroutinefunction(function):
                         await function(*args)
                     else:
                         function(*args)
@@ -76,8 +77,8 @@ async def command_listener() -> None:
             if not matched and stripped.startswith(prefix):
                 logger.warning(f"Unknown command: {stripped}")
 
-        except Exception as e:
-            logger.error(f"Error in command listener: {e}")
+        except Exception:
+            logger.exception("Error in command listener:")
             await asyncio.sleep(1)
 
 
@@ -105,7 +106,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Exiting app. There may be missing logs in Discord if the logging queue was not emptied.")
         sys.exit(0)
-    except Exception as e:
+    except Exception:
         logger.exception("An unexpected error occurred in the main loop! Details:")
         sys.exit(1)
     finally:

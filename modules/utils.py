@@ -1,6 +1,10 @@
 import os
+import sys
 import signal
+import discord
+import subprocess
 import re as regexp
+from typing import TYPE_CHECKING, Any
 from datetime import datetime, timezone
 from . import global_vars as gv
 from .enums import (
@@ -13,6 +17,10 @@ from .enums import (
     DealTuple,
     DealRanges
 )
+
+
+if TYPE_CHECKING:
+    from .bot import EbayScraperBot
 
 
 def matches_pattern(text: str, pattern: str, regex_prefix: str = 'regexp::') -> bool:
@@ -218,3 +226,25 @@ def evaluate_deal(
 
 def sigint_current_process() -> None:
     os.kill(os.getpid(), signal.SIGINT)
+
+
+def restart_current_process() -> None:
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+
+def restart_current_process_2() -> None:
+    python = sys.executable
+    subprocess.Popen([python] + sys.argv)
+    sys.exit(0)
+
+
+async def change_status(bot: EbayScraperBot, logger: Any | None, status_message: str) -> None:
+    await bot.change_presence(activity=discord.Activity(
+        type=discord.ActivityType.custom,
+        name=status_message,
+    ))
+
+    if logger:
+        logger.debug(f"Changed Discord presence to '{status_message}'")
+
+    return None
