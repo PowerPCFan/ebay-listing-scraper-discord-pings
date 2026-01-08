@@ -5,3 +5,4 @@
 - add target price as a key in the keyword config objects instead of a comment, that way it can be used
 - maybe combine the self roles thing with the ping configs / keyword configs instead of separate since they share a role and name and stuff
 - use condition fields to filter out "for parts or not working" / similar items
+- merge async branch to master
