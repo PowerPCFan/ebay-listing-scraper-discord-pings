@@ -4,6 +4,7 @@ import discord
 from datetime import datetime, timezone
 from discord.ext import commands
 from discord import app_commands
+from urllib.parse import quote
 from .logger import logger, setLevelValue
 from .config_tools import PingConfig, reload_config, SelfRoleGroup, SelfRole
 from .rolepicker_config_tools import RolePickerRole, RolePickerState
@@ -35,12 +36,137 @@ async def print_new_listing(item: EbayItem, ping_config: PingConfig, deal: DealT
         channel = cast(discord.TextChannel, bot.get_channel(ping_config.channel_id))
 
         if channel:
-            embed = bot.create_listing_embed(item, deal)
+            embed, view = bot.create_listing_embed_with_buttons(item, deal, ping_config)
             mention = f"<@&{ping_config.role}>" if ping_config.role else ""
-            await channel.send(content=mention, embed=embed)
+            await channel.send(content=mention, embed=embed, view=view)
             return
     except Exception:
         logger.exception("Failed to send via bot:")
+
+
+class NotificationToggleButton(discord.ui.Button):
+    def __init__(self, role_id: int):
+        super().__init__(
+            label="Toggle Notifications",
+            style=discord.ButtonStyle.primary,
+            custom_id=f"NotificationToggleButton{role_id}",
+            emoji="🔔"
+        )
+        self.role_id: int = role_id
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+
+        member = interaction.user
+        guild = interaction.guild
+
+        if not isinstance(member, discord.Member):
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="Error",
+                    description="Could not fetch your member information.",
+                    color=discord.Color.red()
+                ),
+                ephemeral=True
+            )
+            return
+
+        if not guild:
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="Error",
+                    description="Could not fetch guild information.",
+                    color=discord.Color.red()
+                ),
+                ephemeral=True
+            )
+            return
+
+        role = guild.get_role(self.role_id)
+
+        if not role:
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="Role Not Found",
+                    description="The notification role could not be found in this server.",
+                    color=discord.Color.red()
+                ),
+                ephemeral=True
+            )
+            return
+
+        try:
+            if role in member.roles:
+                await member.remove_roles(role)
+                await interaction.followup.send(
+                    embed=discord.Embed(
+                        title="Notifications Disabled",
+                        description=f"You have disabled notifications for {role.mention}.",
+                        color=discord.Color.red()
+                    ),
+                    ephemeral=True
+                )
+            elif role not in member.roles:
+                await member.add_roles(role)
+                await interaction.followup.send(
+                    embed=discord.Embed(
+                        title="Notifications Enabled",
+                        description=f"You have enabled notifications for {role.mention}.",
+                        color=discord.Color.green()
+                    ),
+                    ephemeral=True
+                )
+            else:
+                raise Exception("Unexpected role state.")
+        except discord.Forbidden:
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="Permissions Error",
+                    description="The bot does not have permission to manage your roles.",
+                    color=discord.Color.red()
+                ),
+                ephemeral=True
+            )
+        except Exception as e:
+            logger.exception("Error toggling notification role:")
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="Error",
+                    description=f"An unexpected error occurred: {type(e).__name__}",
+                    color=discord.Color.red()
+                ),
+                ephemeral=True
+            )
+
+
+class ListingButtonView(discord.ui.View):
+    def __init__(self, item: EbayItem, ping_config: PingConfig):
+        super().__init__(timeout=None)
+        self.item = item
+        self.ping_config = ping_config
+
+        self.add_notification_toggle_button()
+        self.add_share_button()
+
+    def add_share_button(self):
+        encoded_url = quote(self.item.url, safe='')
+        encoded_name = quote(self.item.title, safe='')
+        share_url = (
+            "https://www.powerpcfan.xyz/ebay-listing-scraper-discord-pings-internal/"
+            f"share-sheet?url={encoded_url}&name={encoded_name}"
+        )
+
+        button = discord.ui.Button(
+            label="Share Listing",
+            style=discord.ButtonStyle.link,
+            url=share_url,
+            emoji="🔗"
+        )
+        self.add_item(button)
+
+    def add_notification_toggle_button(self):
+        button = NotificationToggleButton(role_id=self.ping_config.role)
+        self.add_item(button)
 
 
 class EbayScraperBot(commands.Bot):
@@ -213,17 +339,27 @@ class EbayScraperBot(commands.Bot):
             logger.error(f"Could not find channel with ID {channel_id}")
             return
 
-        embed = self.create_listing_embed(item, deal)
+        embed, view = self.create_listing_embed_with_buttons(item, deal, ping_config)
 
         mention = f"<@&{ping_config.role}>"
 
         try:
-            await channel.send(content=mention, embed=embed)
+            await channel.send(content=mention, embed=embed, view=view)
             logger.debug(f"Sent Discord notification for {ping_config.category_name}")
         except discord.Forbidden:
             logger.error(f"No permission to send messages in channel {channel.name}")
         except Exception:
             logger.exception("Error sending notification:")
+
+    def create_listing_embed_with_buttons(
+        self,
+        item: EbayItem,
+        deal: DealTuple,
+        ping_config: PingConfig
+    ) -> tuple[discord.Embed, ListingButtonView]:
+        view = ListingButtonView(item, ping_config)
+        embed = bot.create_listing_embed(item, deal)
+        return embed, view
 
     def create_listing_embed(
         self,
