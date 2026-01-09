@@ -4,6 +4,7 @@
     "type": "object",
     "properties": {
         "debug_mode": { "type": "boolean" },
+        "discord_py_debug_mode": { "type": "boolean" },
         "log_api_responses": { "type": "boolean" },
         "file_logging": { "type": "boolean" },
         "ping_for_warnings": { "type": "boolean" },

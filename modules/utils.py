@@ -239,12 +239,16 @@ def restart_current_process_2() -> None:
 
 
 async def change_status(bot: EbayScraperBot, logger: Any | None, status_message: str) -> None:
-    await bot.change_presence(activity=discord.Activity(
-        type=discord.ActivityType.custom,
-        name=status_message,
-    ))
+    try:
+        await bot.change_presence(activity=discord.Activity(
+            type=discord.ActivityType.custom,
+            name=status_message,
+        ))
 
-    if logger:
-        logger.debug(f"Changed Discord presence to '{status_message}'")
+        if logger:
+            logger.debug(f"Changed Discord presence to '{status_message}'")
+    except Exception:
+        if logger:
+            logger.exception("Failed to change Discord presence:")
 
     return None

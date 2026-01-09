@@ -7,6 +7,7 @@ from . import webhook_sender
 
 _discord_webhook_send_count = 0
 setLevelValue = logging.DEBUG if gv.config.debug_mode else logging.INFO
+discordPyLevelValue = logging.DEBUG if gv.config.discord_py_debug_mode else logging.INFO
 LOGGER_DISCORD_WEBHOOK_URL = gv.config.logger_webhook
 
 ANSI = "\033["

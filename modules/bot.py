@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from discord.ext import commands
 from discord import app_commands
 from urllib.parse import quote
-from .logger import logger, setLevelValue
+from .logger import logger, discordPyLevelValue
 from .config_tools import PingConfig, reload_config, SelfRoleGroup, SelfRole
 from .rolepicker_config_tools import RolePickerRole, RolePickerState
 from .ebay_api import EbayItem
@@ -55,7 +55,21 @@ class NotificationToggleButton(discord.ui.Button):
         self.role_id: int = role_id
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        try:
+            await interaction.response.defer()
+        except discord.errors.NotFound:
+            logger.warning("Interaction expired for notification toggle button")
+            try:
+                await interaction.followup.send(
+                    content="Interaction failed. Please try again.",
+                    ephemeral=True
+                )
+            except Exception:
+                logger.warning("Failed to send followup message for expired interaction")
+            return
+        except Exception as e:
+            logger.error(f"Failed to defer interaction: {e}")
+            return
 
         member = interaction.user
         guild = interaction.guild
@@ -181,7 +195,7 @@ class EbayScraperBot(commands.Bot):
         discord_logger.handlers = []
         for handler in logger.handlers:
             discord_logger.addHandler(handler)
-        discord_logger.setLevel(setLevelValue)
+        discord_logger.setLevel(discordPyLevelValue)
 
         # i'm not using the voice version of discord.py and i'm also not using VoiceClient
         # but for some reason it's still yelling at me in logs

@@ -51,6 +51,7 @@ class PingConfig:
 @dataclass
 class Config:
     debug_mode: bool
+    discord_py_debug_mode: bool
     log_api_responses: bool
     file_logging: bool
     ping_for_warnings: bool

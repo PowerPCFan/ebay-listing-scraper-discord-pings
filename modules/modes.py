@@ -93,13 +93,21 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
         f"Fetched {len(all_categories)} unique categories for {len(gv.config.pings)} pings"
     )
 
+    logger.info(f"Fetched {sum(len(items) for items in results)} items from all categories")
+
     for i, ping_config in enumerate(gv.config.pings):
         combined_items = {}
+        logger.debug(f"Processing ping config #{i} ({ping_config.category_name}), which has {len(ping_to_categories[i])} categories")  # noqa: E501
 
         for category_id in ping_to_categories[i]:
-            for item_data in category_cache.get(category_id, []):
+            category_items = category_cache.get(category_id, [])
+
+            logger.debug(f"Category {category_id} has {len(category_items)} items")
+
+            for item_data in category_items:
                 item_data: dict
                 item_id = item_data.get('itemId', '')
+
                 if item_id and item_id not in combined_items:
                     combined_items[item_id] = item_data
 
@@ -114,6 +122,7 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
                 continue
 
             matches, min_price, max_price, deal_ranges = matches_ping_criteria(item, ping_config)
+
             if matches:
                 logger.info(f"New matching listing: {item.title}... - ${item.price.value}")
 
@@ -138,6 +147,8 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
             )
         else:
             logger.debug(f"No new matches for {ping_config.category_name}")
+
+    logger.debug(f"Finished processing {len(gv.config.pings)} ping configs")
 
 
 def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> Match:
