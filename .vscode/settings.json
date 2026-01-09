@@ -5,5 +5,12 @@
             "color": "#D16969",
             "fontWeight": "bold"
         }]
-    }
+    },
+    "vscodeStatus.apiUrl": "https://vscode-status-2.blinkl.ink",
+    "json.schemas": [
+        {
+            "fileMatch": ["config.*"],
+            "url": "./schema.json"
+        }
+    ]
 }

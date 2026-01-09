@@ -1,5 +1,37 @@
 from enum import Enum
 from typing import NamedTuple
+from dataclasses import dataclass
+
+
+@dataclass
+class PriceRange:
+    start: float
+    end: float
+
+    def contains(self, price: float) -> bool:
+        # check if a price falls within the range
+        return self.start <= price <= self.end
+
+
+@dataclass
+class DealRanges:
+    fire_deal: PriceRange
+    great_deal: PriceRange
+    good_deal: PriceRange
+    ok_deal: PriceRange
+
+    def get_deal_type(self, price: float) -> 'DealTuple':
+        # determine deal based on price
+        if self.fire_deal.contains(price):
+            return Deal.FIRE_DEAL
+        elif self.great_deal.contains(price):
+            return Deal.GREAT_DEAL
+        elif self.good_deal.contains(price):
+            return Deal.GOOD_DEAL
+        elif self.ok_deal.contains(price):
+            return Deal.OK_DEAL
+        else:
+            return Deal.UNKNOWN_DEAL
 
 
 class Category(NamedTuple):
@@ -79,6 +111,13 @@ class MarketplaceID(Enum):
     EBAY_VN = "EBAY_VN"
 
 
+class Match(NamedTuple):
+    is_match: bool
+    min_price: float | None
+    max_price: float | None
+    deal_ranges: DealRanges | None
+
+
 class Emojis:
     OBO = "<:obo:1453585974213873695>"
     SHIPPING = "<:shipping:1453716706017935482>"
@@ -87,8 +126,72 @@ class Emojis:
     SELLER = "<:seller:1453721027103428609>"
     CONDITION = "<:condition:1453722903609610504>"
     LISTING_TYPE = "<:listing_type:1453723643766112388>"
+    WARNING = "<:warning:1455577563425673403>"
 
 
-class Mode(Enum):
-    QUERY = "query"
-    PARSE = "parse"
+class DealEmojis:
+    # Currently unused since custom emojis don't work in the embed "Author" field
+    # FIRE_DEAL = "<:fire_deal:1454943220000755924>"
+    # GREAT_DEAL = "<:great_deal:1455334348134813696>"
+    # GOOD_DEAL = "<:good_deal:1455334351850963083>"
+    # OK_DEAL = "<:ok_deal:1455334349900742786>"
+
+    FIRE_DEAL = "🔥"
+    GREAT_DEAL = "🟢"
+    GOOD_DEAL = "🟡"
+    OK_DEAL = "🟠"
+
+    UNKNOWN = ""
+
+
+class DealColors:
+    # These colors were roughly estimated based on the emojis
+    # FIRE_DEAL = 0xE03A3A
+    FIRE_DEAL = 0x48862D
+    GREAT_DEAL = 0x48862D
+    GOOD_DEAL = 0xFFDD00
+    OK_DEAL = 0xF2900F
+
+    UNKNOWN = 0x0064D3
+
+
+class DealTuple(NamedTuple):
+    name: str
+    emoji: str
+    color: int
+
+
+class Deal:
+    """
+    Each value is a `_DealTuple` - `(name: str, emoji: str, color: int)`.
+    """
+
+    FIRE_DEAL = DealTuple(
+        name="Fire Deal",
+        emoji=DealEmojis.FIRE_DEAL,
+        color=DealColors.FIRE_DEAL
+    )
+
+    GREAT_DEAL = DealTuple(
+        name="Great Deal",
+        emoji=DealEmojis.GREAT_DEAL,
+        color=DealColors.GREAT_DEAL
+    )
+
+    GOOD_DEAL = DealTuple(
+        name="Good Deal",
+        emoji=DealEmojis.GOOD_DEAL,
+        color=DealColors.GOOD_DEAL
+    )
+
+    OK_DEAL = DealTuple(
+        name="Average Deal",
+        emoji=DealEmojis.OK_DEAL,
+        color=DealColors.OK_DEAL
+    )
+
+    UNKNOWN_DEAL = DealTuple(
+        name="Unknown Deal",
+        emoji=DealEmojis.UNKNOWN,
+        color=DealColors.UNKNOWN
+    )

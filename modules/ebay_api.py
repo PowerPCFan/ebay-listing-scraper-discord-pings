@@ -1,11 +1,10 @@
 import time
 import base64
-import requests
+import httpx
 from pathlib import Path
 from typing import Any, cast
-from . import global_vars
+from . import global_vars as gv
 from .logger import logger
-from .global_vars import config
 from .utils import iso_to_unix_timestamp
 from .enums import (
     Category, Categories, Price, Seller, Condition, BuyingOption,
@@ -13,7 +12,7 @@ from .enums import (
     MarketplaceID
 )
 
-if config.debug_mode:
+if gv.config.log_api_responses:
     import json
     from datetime import datetime
 else:
@@ -23,8 +22,23 @@ else:
 
 _token_cache: str | None = None
 _token_expires_at: int = 0
+_http_client: httpx.AsyncClient | None = None
 
 api_url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
+
+
+async def get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(timeout=30.0)
+    return _http_client
+
+
+async def close_http_client() -> None:
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
 
 
 def _get_response_json_filename() -> Path:
@@ -90,6 +104,22 @@ class EbayItem:
         )).get("imageUrl", None)  # for some reason image is smaller than thumbnail
 
         return str(thumb) if thumb else None
+
+    @property
+    def main_image(self) -> str | None:
+        thumbnail_images: list[dict[str, str]] | None = self.data.get("thumbnailImages", None)
+
+        if not thumbnail_images or not isinstance(thumbnail_images, list):
+            return None
+
+        first_image_dict = thumbnail_images[0] if thumbnail_images else None
+
+        if not first_image_dict or not isinstance(first_image_dict, dict):
+            return None
+
+        image = first_image_dict.get("imageUrl", None)
+
+        return str(image) if image else None
 
     @property
     def price(self) -> Price:
@@ -209,7 +239,7 @@ class EbayItem:
             return None
 
 
-def get_valid_token() -> str | None:
+async def get_valid_token() -> str | None:
     global _token_cache, _token_expires_at
 
     current_time = int(time.time())
@@ -219,22 +249,22 @@ def get_valid_token() -> str | None:
         return _token_cache
 
     try:
-        if not config.ebay_app_id or not config.ebay_cert_id:
-            raise ValueError("eBay App ID and Cert ID must be configured")
+        credentials = base64.b64encode(f"{gv.config.ebay_app_id}:{gv.config.ebay_cert_id}".encode()).decode()
 
-        credentials = base64.b64encode(f"{config.ebay_app_id}:{config.ebay_cert_id}".encode()).decode()
-
-        response = requests.post(
+        client = await get_http_client()
+        response = await client.post(
             "https://api.ebay.com/identity/v1/oauth2/token",
             headers={
                 "Content-Type": "application/x-www-form-urlencoded",
                 "Authorization": f"Basic {credentials}"
             },
-            data="grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope",
-            timeout=30
+            data={
+                "grant_type": "client_credentials",
+                "scope": "https://api.ebay.com/oauth/api_scope"
+            }
         )
 
-        if not response.ok:
+        if response.status_code != 200:
             logger.error(f"Token request failed: {response.status_code} {response.text}")
             return None
 
@@ -250,8 +280,8 @@ def get_valid_token() -> str | None:
         return None
 
 
-def initialize() -> bool:
-    token = get_valid_token()
+async def initialize() -> bool:
+    token = await get_valid_token()
 
     if not token:
         raise ValueError("Failed to generate eBay OAuth token")
@@ -261,78 +291,9 @@ def initialize() -> bool:
     return True
 
 
-def search_query(
-    query: str,
-    categories: list[str],
-    min_price: int | None = None,
-    max_price: int | None = None
-) -> list[dict[str, Any]]:
+async def search_single_category(category_id: str, price_filter: str = "") -> list[dict[str, Any]]:
     try:
-        token = get_valid_token()
-        if not token:
-            logger.error(f"Failed to get OAuth token for query: {query}")
-            return []
-
-        params = {
-            "q": query,
-            "category_ids": ",".join(categories),
-            "filter": "buyingOptions:{FIXED_PRICE|AUCTION}",
-            "sort": "newlyListed",
-            "limit": str(global_vars.limit)
-        }
-
-        if min_price or max_price:
-            price_filter = ""
-            if min_price and max_price:
-                price_filter = f",price:[{min_price}..{max_price}],priceCurrency:USD"
-            elif min_price:
-                price_filter = f",price:[{min_price}],priceCurrency:USD"
-            elif max_price:
-                price_filter = f",price:[..{max_price}],priceCurrency:USD"
-            params["filter"] += price_filter
-
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
-
-        global_vars.api_call_count += 1
-        response = requests.get(api_url, params=params, headers=headers, timeout=30)
-
-        if config.log_api_responses:
-            assert json is not None
-
-            parsed = json.loads(response.text)
-            with open(
-                _get_response_json_filename(),
-                mode="w",
-                encoding="utf-8"
-            ) as f:
-                json.dump(parsed, f, indent=4)
-
-        if response.status_code == 401 or response.status_code == 403:
-            global _token_cache, _token_expires_at
-            _token_cache = None
-            _token_expires_at = 0
-            return []
-
-        if not response.ok:
-            logger.error(f"eBay API error for query '{query}': {response.status_code}")
-            return []
-
-        data = response.json()
-        return data.get("itemSummaries", [])
-
-    except Exception:
-        logger.exception(f"Error searching query '{query}':")
-        return []
-
-
-def search_single_category(category_id: str, price_filter: str = "") -> list[dict[str, Any]]:
-    try:
-        token = get_valid_token()
+        token = await get_valid_token()
 
         if not token:
             logger.error(f"Failed to get OAuth token for category {category_id}")
@@ -342,7 +303,7 @@ def search_single_category(category_id: str, price_filter: str = "") -> list[dic
             "category_ids": category_id,
             "filter": "buyingOptions:{FIXED_PRICE|AUCTION}" + price_filter,
             "sort": "newlyListed",
-            "limit": str(global_vars.limit)
+            "limit": str(gv.limit)
         }
 
         headers = {
@@ -352,13 +313,14 @@ def search_single_category(category_id: str, price_filter: str = "") -> list[dic
             "Accept": "application/json"
         }
 
-        global_vars.api_call_count += 1
-        response = requests.get(api_url, params=params, headers=headers, timeout=30)
+        gv.api_call_count += 1
+        client = await get_http_client()
+        response = await client.get(api_url, params=params, headers=headers)
 
-        if config.log_api_responses:
+        if gv.config.log_api_responses:
             assert json is not None
 
-            parsed = json.loads(response.text)
+            parsed = response.json()
             with open(
                 _get_response_json_filename(),
                 mode="w",
@@ -374,7 +336,7 @@ def search_single_category(category_id: str, price_filter: str = "") -> list[dic
             _token_expires_at = 0
             return []
 
-        if not response.ok:
+        if response.status_code != 200:
             logger.error(f"eBay API error for category {category_id}: {response.status_code}")
             return []
 
