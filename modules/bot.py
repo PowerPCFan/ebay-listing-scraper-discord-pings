@@ -1,7 +1,8 @@
 import asyncio
 import logging
 import discord
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timezone, timedelta
 from discord.ext import commands
 from discord import app_commands
 from urllib.parse import quote
@@ -22,7 +23,8 @@ from .utils import (
     build_shipping_embed_value,
     sigint_current_process,
     restart_current_process,
-    restart_current_process_2
+    restart_current_process_2,
+    change_status
 )
 
 
@@ -241,18 +243,29 @@ class EbayScraperBot(commands.Bot):
         logger.info("Bot ready! Starting eBay scraper...")
 
         logger.debug("Connecting to eBay API...")
+        await change_status(bot=self, logger=logger, message="Connecting to eBay API...")
         initialized = await ebay_api.initialize()
 
         if not initialized:
             logger.critical("Failed to initialize eBay API. Bot will remain online but scraping is disabled.")
+            await change_status(bot=self, logger=logger, emoji="❌", message="eBay API connection failed")
             return
         else:
             logger.info("Successfully connected to eBay API!")
 
-        if not gv.config.start_on_command:
+        if (not gv.config.start_on_command or gv.scraper_was_running) and gv.last_scrape_time is not None:
+            if gv.last_scrape_time > 0:
+                elapsed = time.time() - gv.last_scrape_time
+                remaining = max(0, gv.config.poll_interval_seconds - elapsed)
+
+                if remaining > 5:
+                    logger.info(f"Preserving interval timing - waiting {remaining:.0f}s before next scrape...")
+                    await asyncio.sleep(remaining)
+
             await self.start_scraper()
         else:
             logger.info("Scraper ready but waiting for start command. Use /start (Discord) or :start (Terminal)")
+            await change_status(bot=self, logger=logger, message="Idling (use /start to begin scraping)")
 
     async def setup_persistent_role_pickers(self):
         logger.info("Setting up persistent role picker views...")
@@ -339,6 +352,8 @@ class EbayScraperBot(commands.Bot):
 
         logger.info("Starting eBay monitoring...")
         self._scraper_running = True
+        gv.scraper_was_running = True
+        await change_status(bot=self, logger=logger, message="Starting scraper...")
         asyncio.create_task(modes.match(self))
         return True
 
@@ -670,17 +685,51 @@ def setup_commands(bot: EbayScraperBot):
             poll_interval_seconds = gv.config.poll_interval_seconds
 
             seconds_per_day = 24 * 60 * 60
-            polls_per_day = seconds_per_day / poll_interval_seconds
+
+            active_seconds_per_day = seconds_per_day
+            sleep_hours_info = ""
+
+            if gv.config.sleep_hours:
+                try:
+                    start_dt = datetime.fromisoformat(f"1970-01-01T{gv.config.sleep_hours.start}:00")
+                    end_dt = datetime.fromisoformat(f"1970-01-01T{gv.config.sleep_hours.end}:00")
+
+                    start_time = start_dt.timetz()
+                    end_time = end_dt.timetz()
+
+                    if start_time <= end_time:
+                        # Same day sleep period
+                        start_datetime = datetime.combine(datetime.min, start_time.replace(tzinfo=None))
+                        end_datetime = datetime.combine(datetime.min, end_time.replace(tzinfo=None))
+                        sleep_timedelta = end_datetime - start_datetime
+                        sleep_duration = sleep_timedelta.total_seconds()
+                    else:
+                        # Sleep period crosses midnight
+                        start_datetime = datetime.combine(datetime.min, start_time.replace(tzinfo=None))
+                        end_datetime = datetime.combine(datetime.min, end_time.replace(tzinfo=None))
+                        midnight = datetime.combine(datetime.min + timedelta(days=1), datetime.min.time())
+                        sleep_timedelta = (midnight - start_datetime) + (end_datetime - datetime.combine(datetime.min, datetime.min.time()))  # noqa: E501
+                        sleep_duration = sleep_timedelta.total_seconds()
+
+                    active_seconds_per_day = seconds_per_day - sleep_duration
+                    sleep_hours_duration = sleep_duration / 3600
+                    sleep_hours_info = f"\n- **Sleep hours:** {sleep_hours_duration:.1f}h ({gv.config.sleep_hours.start[:-6]} to {gv.config.sleep_hours.end[:-6]} - UTC Offset {gv.config.sleep_hours.start[-6:]})"  # noqa: E501
+                except Exception:
+                    pass
+
+            polls_per_day = active_seconds_per_day / poll_interval_seconds
             api_calls_per_day = polls_per_day * unique_categories
 
             minutes_between_polls = poll_interval_seconds / 60
             hours_between_polls = poll_interval_seconds / 3600
+            active_hours_per_day = active_seconds_per_day / 3600
 
             embed = discord.Embed(
                 title="Stats",
                 color=discord.Color.blurple(),
                 timestamp=discord.utils.utcnow(),
                 description=(
+                    f"- **Active hours per day:** {active_hours_per_day:.1f}h{sleep_hours_info}\n"
                     f"- **Polls per day:** {polls_per_day:.1f}\n"
                     f"- **Minutes between polls:** {minutes_between_polls:.1f}\n"
                     f"- **API calls per poll:** {unique_categories}\n"
@@ -695,8 +744,21 @@ def setup_commands(bot: EbayScraperBot):
                     name="⚠️ Warning",
                     value=(
                         f"{api_calls_per_day:.0f} calls/day exceeds eBay's rate limit of {rate_limit} calls/day.\n"
-                        "Consider increasing the poll interval or reducing the number of categories."
+                        "Consider increasing the poll interval, reducing the number of categories, or lengthening sleep hours."  # noqa: E501
                     )
+                )
+            elif api_calls_per_day > rate_limit * 0.8:
+                embed.add_field(
+                    name="⚠️ Warning",
+                    value=(
+                        f"{api_calls_per_day:.0f} calls/day is nearing eBay's rate limit of {rate_limit} calls/day.\n"
+                        "Consider increasing the poll interval, reducing the number of categories, or lengthening sleep hours."  # noqa: E501
+                    )
+                )
+            else:
+                embed.add_field(
+                    name="✅ Within Limit",
+                    value=f"{api_calls_per_day:.0f} calls/day is within eBay's rate limit of {rate_limit} calls/day. {Emojis.NICE}"  # noqa: E501
                 )
 
             await interaction.response.send_message(embed=embed)

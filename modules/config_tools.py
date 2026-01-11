@@ -49,6 +49,12 @@ class PingConfig:
 
 
 @dataclass
+class SleepHours:
+    start: str
+    end: str
+
+
+@dataclass
 class Config:
     debug_mode: bool
     discord_py_debug_mode: bool
@@ -76,6 +82,7 @@ class Config:
 
     logger_webhook: str | None = None
     logger_webhook_ping: int | None = None
+    sleep_hours: SleepHours | None = None
 
     @staticmethod
     def load() -> "Config":
@@ -91,8 +98,10 @@ class Config:
 
         pings_data = data.pop("pings", [])
         self_roles_data = data.pop("self_roles", [])
+        sleep_hours_data = data.pop("sleep_hours", None)
         pings: list[PingConfig] = []
         self_roles: list[SelfRoleGroup] = []
+        sleep_hours: SleepHours | None = None
 
         for ping_data in pings_data:
             if ping_data.get("keywords") and isinstance(ping_data["keywords"], list):
@@ -125,7 +134,10 @@ class Config:
                 roles=roles
             ))
 
-        return Config(pings=pings, self_roles=self_roles, **data)
+        if sleep_hours_data:
+            sleep_hours = SleepHours(**sleep_hours_data)
+
+        return Config(pings=pings, self_roles=self_roles, sleep_hours=sleep_hours, **data)
 
 
 def reload_config() -> Config:

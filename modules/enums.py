@@ -127,6 +127,7 @@ class Emojis:
     CONDITION = "<:condition:1453722903609610504>"
     LISTING_TYPE = "<:listing_type:1453723643766112388>"
     WARNING = "<:warning:1455577563425673403>"
+    NICE = "<:nice:1459728762038911088>"
 
 
 class DealEmojis:

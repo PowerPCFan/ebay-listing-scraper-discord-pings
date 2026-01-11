@@ -1,4 +1,5 @@
 import asyncio
+import time
 from . import ebay_api
 from . import global_vars as gv
 from .config_tools import PingConfig
@@ -8,11 +9,13 @@ from .utils import (
     matches_blocklist_override,
     is_seller_blocked,
     evaluate_deal,
-    change_status
+    change_status,
+    is_within_sleep_hours
 )
 from .logger import logger
 from .seen_items import seen_db
 from .enums import BuyingOption, Match, DealRanges
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 
@@ -29,26 +32,42 @@ async def match(bot: "EbayScraperBot") -> None:
 
     while True:
         try:
-            await match_single_cycle(bot)
+            if is_within_sleep_hours():
+                logger.debug("Currently within sleep hours - skipping scrape cycle...")
 
-            logger.info("Polling interval complete.")
-            logger.debug(f"API calls made: {gv.api_call_count}")
-            gv.api_call_count = 0  # reset for next interval
+                if gv.config.sleep_hours:
+                    end = datetime.fromisoformat(f"1970-01-01T{gv.config.sleep_hours.end}").strftime("%H:%M %Z")
+                else:
+                    end = None
+
+                await change_status(bot=bot, logger=logger, message=f"Sleeping until {end}...", emoji="😴")
+            else:
+                await match_single_cycle(bot)
+
+                logger.info("Polling interval complete.")
+                logger.debug(f"API calls made: {gv.api_call_count}")
+                gv.api_call_count = 0  # reset for next interval
+
+                gv.last_scrape_time = time.time()
 
             if gv.scraper_paused:
                 logger.info("Scraper is paused. Waiting for resume command...")
+                await change_status(bot=bot, logger=logger, emoji="⏸️", message="Scraper paused, waiting for /resume...")  # noqa: E501
                 while gv.scraper_paused:
                     await asyncio.sleep(1)
                 logger.info("Scraper resumed!")
+                await change_status(bot=bot, logger=logger, emoji="▶️", message="Scraper resumed, waiting for next action")  # noqa: E501
 
             logger.info(f"Waiting {gv.config.poll_interval_seconds} seconds until next poll...")
 
-            await change_status(bot=bot, logger=logger, status_message="Waiting for next scrape interval...")
+            if not is_within_sleep_hours():
+                await change_status(bot=bot, logger=logger, message="Waiting for next scrape interval...")
 
             await asyncio.sleep(gv.config.poll_interval_seconds)
 
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt received. Exiting...")
+            gv.scraper_was_running = False
             raise
         except Exception as e:
             global exception_count, exceptions
@@ -66,7 +85,7 @@ async def match(bot: "EbayScraperBot") -> None:
 
 
 async def match_single_cycle(bot: "EbayScraperBot") -> None:
-    await change_status(bot=bot, logger=logger, status_message="Scraping eBay...")
+    await change_status(bot=bot, logger=logger, message="Scraping eBay...")
 
     all_categories = set()
     ping_to_categories = {}

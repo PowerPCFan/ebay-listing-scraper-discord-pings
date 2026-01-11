@@ -43,6 +43,34 @@ def matches_pattern(text: str, pattern: str, regex_prefix: str = 'regexp::') -> 
         return pattern.lower() in text_lower
 
 
+def is_within_sleep_hours() -> bool:
+    if not gv.config.sleep_hours:
+        return False
+
+    try:
+        start_str = gv.config.sleep_hours.start
+        end_str = gv.config.sleep_hours.end
+
+        start_dt = datetime.fromisoformat(f"1970-01-01T{start_str}")
+        end_dt = datetime.fromisoformat(f"1970-01-01T{end_str}")
+
+        now_utc = datetime.now(timezone.utc)
+        now_in_sleep_tz = now_utc.astimezone(start_dt.tzinfo)
+
+        current_time = now_in_sleep_tz.timetz()
+        start_time = start_dt.timetz()
+        end_time = end_dt.timetz()
+
+        if start_time <= end_time:
+            return start_time <= current_time <= end_time
+        else:
+            return current_time >= start_time or current_time <= end_time
+    except (ValueError, TypeError) as e:
+        from .logger import logger
+        logger.error(f"Invalid sleep_hours format. Expected HH:MM+/-HH:MM (e.g., '23:00-05:00'): {e}")
+        raise ValueError(f"Invalid sleep_hours configuration: {e}") from e
+
+
 def is_globally_blocked(content: str, extra1: str = "", extra2: str = "") -> bool:
     if not gv.config.global_blocklist:
         return False
@@ -238,11 +266,14 @@ def restart_current_process_2() -> None:
     sys.exit(0)
 
 
-async def change_status(bot: EbayScraperBot, logger: Any | None, status_message: str) -> None:
+async def change_status(bot: EbayScraperBot, logger: Any | None, message: str, emoji: str | None = None) -> None:
     try:
+        status_message = f"{emoji} {message}" if emoji else message
+
         await bot.change_presence(activity=discord.Activity(
             type=discord.ActivityType.custom,
-            name=status_message,
+            name="Custom Status",
+            state=status_message
         ))
 
         if logger:
