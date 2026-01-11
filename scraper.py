@@ -13,6 +13,10 @@ from modules.utils import sigint_current_process
 
 
 async def command_listener() -> None:
+    """
+    Listens for defined commands via `stdin` and executes functions accordingly
+    """
+
     prefix = ":"
 
     def _reload_config() -> None:
@@ -83,6 +87,8 @@ async def command_listener() -> None:
 
 
 async def start_discord_bot() -> None:
+    """Starts the Discord bot."""
+
     try:
         await discord_bot.start(gv.config.discord_bot_token)
     except Exception:
@@ -90,6 +96,11 @@ async def start_discord_bot() -> None:
 
 
 async def run_main() -> None:
+    """
+    Starts the main components of the app:
+    - the Discord bot (which starts the scraper once connected)
+    - the stdin command listener
+    """
     tasks = []
     logger.info("Starting Discord bot...")
     tasks.append(asyncio.create_task(start_discord_bot()))

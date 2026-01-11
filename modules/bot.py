@@ -31,21 +31,6 @@ from .utils import (
 custom_dedent = lambda t, s: "\n".join([l[s:] if l.startswith(" " * s) else l for l in t.splitlines()])  # noqa: E731, E741, E501
 
 
-async def print_new_listing(item: EbayItem, ping_config: PingConfig, deal: DealTuple) -> None:
-    logger.debug(f"Sending Discord notification for {ping_config.category_name}")
-
-    try:
-        channel = cast(discord.TextChannel, bot.get_channel(ping_config.channel_id))
-
-        if channel:
-            embed, view = bot.create_listing_embed_with_buttons(item, deal, ping_config)
-            mention = f"<@&{ping_config.role}>" if ping_config.role else ""
-            await channel.send(content=mention, embed=embed, view=view)
-            return
-    except Exception:
-        logger.exception("Failed to send via bot:")
-
-
 class NotificationToggleButton(discord.ui.Button):
     def __init__(self, role_id: int):
         super().__init__(
@@ -268,6 +253,7 @@ class EbayScraperBot(commands.Bot):
             await change_status(bot=self, logger=logger, message="Idling (use /start to begin scraping)")
 
     async def setup_persistent_role_pickers(self):
+        """Sets up persistent role picker views (survives bot restarts) from the role picker states file"""
         logger.info("Setting up persistent role picker views...")
 
         try:
@@ -315,6 +301,7 @@ class EbayScraperBot(commands.Bot):
             await self._fallback_to_config_views()
 
     async def save_picker_state_from_messages(self, message_ids: list[int], role_groups: list[SelfRoleGroup]):
+        """Saves role picker states based on message IDs and role groups"""
         states = []
         for i, role_group in enumerate(role_groups):
             if i < len(message_ids):
@@ -336,6 +323,7 @@ class EbayScraperBot(commands.Bot):
             logger.exception("Failed to save role picker states:")
 
     async def _fallback_to_config_views(self):
+        """Fallback function to recreate views from the config file, if loading persistent states fails"""
         logger.info("Using fallback: creating views from current config...")
 
         for role_group in gv.config.self_roles:
@@ -346,6 +334,7 @@ class EbayScraperBot(commands.Bot):
         logger.info(f"Created {len(gv.config.self_roles)} fallback role picker views")
 
     async def start_scraper(self) -> bool:
+        """Starts the eBay scraper, if it's not already running"""
         if self._scraper_running:
             logger.warning("Scraper is already running!")
             return False
