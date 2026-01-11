@@ -10,7 +10,7 @@ from .logger import logger, discordPyLevelValue
 from .config_tools import PingConfig, reload_config, SelfRoleGroup, SelfRole
 from .rolepicker_config_tools import RolePickerRole, RolePickerState
 from .ebay_api import EbayItem
-from .enums import DealTuple, Emojis
+from .enums import ConditionEnum, DealTuple, Emojis
 from . import global_vars as gv
 from . import ebay_api
 from . import modes
@@ -771,74 +771,109 @@ def setup_commands(bot: EbayScraperBot):
             )
         )
 
-    @bot.tree.command(name='config-summary', description="Create a summary of the bot's config.json")
+    # @bot.tree.command(name='view-config', description="Send the contents of the bot's config.json")
+    # @commands.is_owner()
+    # async def view_config_command(interaction: discord.Interaction):
+    #     try:
+    #         file = discord.File(
+    #             io.BytesIO(config_tools.get_raw_config().encode('utf-8')),
+    #             filename="summary.txt"
+    #         )
+
+    #         await interaction.response.send_message(
+    #             content="This file contains sensitive information. Do not share it!",
+    #             file=file,
+    #             ephemeral=True
+    #         )
+
+    #     except Exception as e:
+    #         await interaction.response.send_message(
+    #             embed=discord.Embed(
+    #                 title="Error",
+    #                 description=f"Error retrieving config: {type(e).__name__}",
+    #                 color=discord.Color.red(),
+    #                 timestamp=discord.utils.utcnow()
+    #             ),
+    #             ephemeral=True
+    #         )
+
+    @bot.tree.command(name='config-summary', description="Send a summary of the current bot configuration")
     @commands.is_owner()
-    async def config_command(interaction: discord.Interaction):
+    async def config_summary_command(interaction: discord.Interaction, ephemeral: bool = True):
         try:
-            config_summary = "## Config Summary\n\n"
+            embed = discord.Embed(title="Config Summary", color=discord.Color.blurple())
 
-            config_summary += custom_dedent(f"""\
-                - Debug Mode: {gv.config.debug_mode}
-                - Log API Responses: {gv.config.log_api_responses}
-                - File Logging: {gv.config.file_logging}
-                - Ping for Warnings: {gv.config.ping_for_warnings}
-                - Start on Command: {gv.config.start_on_command}
-                - Bot Debug Commands: {gv.config.bot_debug_commands}
-                - Poll Interval: {gv.config.poll_interval_seconds} seconds
+            embed.add_field(
+                name="Boolean Flags",
+                value="\n".join([
+                    f"- **Debug Mode:** `{gv.config.debug_mode}`",
+                    f"- **Discord.py Debug Mode:** `{gv.config.discord_py_debug_mode}`",
+                    f"- **Log API Responses:** `{gv.config.log_api_responses}`",
+                    f"- **File Logging:** `{gv.config.file_logging}`",
+                    f"- **Ping for Warnings:** `{gv.config.ping_for_warnings}`",
+                    f"- **Start on Command:** `{gv.config.start_on_command}`",
+                    f"- **Bot Debug Commands:** `{gv.config.bot_debug_commands}`",
+                    f"- **Include Shipping in Deal Evaluation:** `{gv.config.include_shipping_in_deal_evaluation}`",
+                    f"- **Include Shipping in Price Filters:** `{gv.config.include_shipping_in_price_filters}`"
+                ])
+            )
 
+            embed.add_field(
+                name="Polling Settings",
+                value="\n".join([
+                    f"- **Poll Interval:** {gv.config.poll_interval_seconds}s ({f"{(gv.config.poll_interval_seconds / 60):.0f}" if (gv.config.poll_interval_seconds / 60).is_integer() else f"{(gv.config.poll_interval_seconds / 60):.1f}"} minutes)",  # noqa: E501
+                    f"- **Sleep Hours:** {gv.config.sleep_hours.start[:-6] if gv.config.sleep_hours else 'N/A'} to {gv.config.sleep_hours.end[:-6] if gv.config.sleep_hours else 'N/A'} (UTC Offset {gv.config.sleep_hours.start[-6:] if gv.config.sleep_hours else 'N/A'})"  # noqa: E501
+                ])
+            )
 
-                - Global Blocklist Patterns:{'\n  - '.join([""] + gv.config.global_blocklist) if gv.config.global_blocklist else None}
+            embed.add_field(
+                name="Discord Settings",
+                value="\n".join([
+                    f"- **Logging to Webhook:** {'Enabled' if gv.config.logger_webhook else 'Disabled'}",
+                    f"- **Logger Webhook Ping:** <@{gv.config.logger_webhook_ping}>",
+                    f"- **Discord Guild ID:** `{gv.config.discord_guild_id}`",
+                    f"- **Admin Role ID:** <@&{gv.config.admin_role_id}>"
+                ])
+            )
 
+            embed.add_field(
+                name="Keyword Blocklist",
+                value="\n".join("- " + item for item in gv.config.global_blocklist)
+            )
 
-                - Seller Blocklist Patterns:{'\n  - '.join([""] + gv.config.seller_blocklist) if gv.config.seller_blocklist else None}
+            embed.add_field(
+                name="Seller Blocklist",
+                value="\n".join("- " + item for item in gv.config.seller_blocklist)
+            )
 
+            embed.add_field(
+                name="Condition Blocklist",
+                value="\n".join(f"- `{ConditionEnum(cid)._name_}` (`{cid}`)" for cid in gv.config.condition_blocklist)
+            )
 
-                - Ping Configs:
-            """, 16)  # noqa: E501, W293
+            embed.add_field(
+                name="Self Roles",
+                value="\n".join(f"- <@&{role.id}>" for self_role in gv.config.self_roles for role in self_role.roles)
+            )
 
-            for ping in gv.config.pings:
-                config_summary += custom_dedent(f"""\
-                  - {ping.category_name}:
-                    - Keywords:\
-                """, 16)  # noqa: W293
+            embed.add_field(
+                name="Pings",
+                value="\n".join([
+                    f"- **Amount of Pings:** {len(gv.config.pings)}",
+                    f"- **Categories:**\n{'\n'.join(f'  - {ping.category_name}' for ping in gv.config.pings)}"
+                ])
+            )
 
-                for keyword in ping.keywords:
-                    config_summary += custom_dedent(f"""\
-
-                      - {keyword.keyword}:
-                        - Min Price: {keyword.min_price or 'None'}
-                        - Max Price: {keyword.max_price or 'None'}\
-                    """, 16)  # noqa: W293
-
-                    if keyword.deal_ranges:
-                        config_summary += custom_dedent(f"""\
-                        - Deal Ranges:
-                          - Fire Deal: {keyword.deal_ranges.fire_deal or 'None'}
-                          - Great Deal: {keyword.deal_ranges.great_deal or 'None'}
-                          - Good Deal: {keyword.deal_ranges.good_deal or 'None'}
-                          - OK Deal: {keyword.deal_ranges.ok_deal or 'None'}
-                        """, 16)
-
-                config_summary += custom_dedent(f"""
-                    - Categories: {', '.join(str(ctg) for ctg in ping.categories) if ping.categories else 'None'}
-                    - Channel ID: {ping.channel_id or 'None'}
-                    - Role: {ping.role or 'None'}
-                """, 16)  # noqa: W293
-
-            with open("aaaa.txt", "w", encoding="utf-8") as f:
-                f.write(config_summary)
-
-            await interaction.response.send_message(content=config_summary, ephemeral=True)
-
+            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
         except Exception as e:
             await interaction.response.send_message(
                 embed=discord.Embed(
                     title="Error",
-                    description=f"Error retrieving config: {type(e).__name__}",
+                    description=f"Error generating config summary: {type(e).__name__}",
                     color=discord.Color.red(),
                     timestamp=discord.utils.utcnow()
                 ),
-                ephemeral=True
+                ephemeral=ephemeral
             )
 
     @bot.tree.command(name='pause', description="Pause the eBay listing scraper at the end of the current interval")

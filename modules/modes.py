@@ -209,8 +209,16 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
                     if min_price and price < min_price:
                         logger.debug(f"Item rejected: price ${price} below min ${min_price} for keyword '{keyword}'")
                         continue
+
                     if max_price and price > max_price:
                         logger.debug(f"Item rejected: price ${price} above max ${max_price} for keyword '{keyword}'")
+                        continue
+
+                if item.condition.id:
+                    if item.condition.id and item.condition.id in gv.config.condition_blocklist:
+                        logger.debug(
+                            f"Item rejected: condition ID '{item.condition.id}' ({item.condition.name}) is blocklisted"
+                        )
                         continue
             except (ValueError, TypeError):
                 pass

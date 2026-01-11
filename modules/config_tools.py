@@ -6,6 +6,7 @@ from .enums import PriceRange, DealRanges
 
 CONFIG_JSON_POSSIBLE = ["config.json", "config.jsonc", "config.json5"]
 CONFIG_JSON = None
+
 for filename in CONFIG_JSON_POSSIBLE:
     path = Path(__file__).parent.parent / filename
     if path.exists():
@@ -78,6 +79,7 @@ class Config:
 
     global_blocklist: list[str]
     seller_blocklist: list[str]
+    condition_blocklist: list[int]
 
     pings: list[PingConfig]
     self_roles: list[SelfRoleGroup] = field(default_factory=list)
@@ -144,3 +146,13 @@ class Config:
 
 def reload_config() -> Config:
     return Config.load()
+
+
+def get_raw_config() -> str:
+    if CONFIG_JSON is None:
+        raise FileNotFoundError(
+            "No config file found. Please create a config.json, config.jsonc, or config.json5 file."
+        )
+
+    with open(CONFIG_JSON, "r", encoding="utf-8") as f:
+        return f.read()

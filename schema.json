@@ -31,6 +31,10 @@
             "type": "array",
             "items": { "type": "string" }
         },
+        "condition_blocklist": {
+            "type": "array",
+            "items": { "type": "integer" }
+        },
 
         "logger_webhook": { "type": ["string", "null"] },
         "logger_webhook_ping": { "type": ["integer", "null"] },
@@ -170,6 +174,7 @@
         "discord_guild_id",
         "global_blocklist",
         "seller_blocklist",
+        "condition_blocklist",
         "pings"
     ]
 }
