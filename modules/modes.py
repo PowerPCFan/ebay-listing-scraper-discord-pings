@@ -145,11 +145,13 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
             if matches:
                 logger.info(f"New matching listing: {item.title}... - ${item.price.value}")
 
+                price = _get_item_price(item, include_shipping=gv.config.include_shipping_in_deal_evaluation)
+
                 deal = evaluate_deal(
-                    item.price.value,
-                    min_price,
-                    max_price,
-                    deal_ranges
+                    price=price,
+                    min_price=min_price,
+                    max_price=max_price,
+                    deal_ranges=deal_ranges
                 )
 
                 await bot.send_listing_notification(item, ping_config, deal)
@@ -170,6 +172,20 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
     logger.debug(f"Finished processing {len(gv.config.pings)} ping configs")
 
 
+def _get_item_price(item: ebay_api.EbayItem, include_shipping: bool = False) -> float:
+    base_price = item.price.value or 0.0
+
+    if not include_shipping:
+        return base_price
+
+    shipping_cost = 0.0
+
+    if len(item.shipping) > 0 and item.shipping[0].cost.value is not None:
+        shipping_cost = item.shipping[0].cost.value
+
+    return base_price + shipping_cost
+
+
 def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> Match:
     title_lower = item.title.lower()
 
@@ -188,7 +204,8 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
         if matches_pattern(title_lower, keyword):
             try:
                 if item.price.value:
-                    price = item.price.value
+                    price = _get_item_price(item, include_shipping=gv.config.include_shipping_in_price_filters)
+
                     if min_price and price < min_price:
                         logger.debug(f"Item rejected: price ${price} below min ${min_price} for keyword '{keyword}'")
                         continue

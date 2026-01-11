@@ -10,6 +10,9 @@
         "ping_for_warnings": { "type": "boolean" },
         "start_on_command": { "type": "boolean" },
         "bot_debug_commands": { "type": "boolean" },
+        "include_shipping_in_deal_evaluation": { "type": "boolean" },
+        "include_shipping_in_price_filters": { "type": "boolean" },
+
         "poll_interval_seconds": { "type": "integer", "minimum": 0 },
 
         "ebay_app_id": { "type": "string" },
@@ -157,6 +160,8 @@
         "ping_for_warnings",
         "start_on_command",
         "bot_debug_commands",
+        "include_shipping_in_deal_evaluation",
+        "include_shipping_in_price_filters",
         "poll_interval_seconds",
         "ebay_app_id",
         "ebay_cert_id",

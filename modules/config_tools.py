@@ -63,6 +63,8 @@ class Config:
     ping_for_warnings: bool
     start_on_command: bool
     bot_debug_commands: bool
+    include_shipping_in_deal_evaluation: bool
+    include_shipping_in_price_filters: bool
 
     poll_interval_seconds: int
 
