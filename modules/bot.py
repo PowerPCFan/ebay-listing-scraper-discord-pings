@@ -10,7 +10,7 @@ from .logger import logger, discordPyLevelValue
 from .config_tools import PingConfig, reload_config, SelfRoleGroup, SelfRole
 from .rolepicker_config_tools import RolePickerRole, RolePickerState
 from .ebay_api import EbayItem
-from .enums import ConditionEnum, DealTuple, Emojis
+from .enums import ConditionEnum, DealTuple, Emojis, Match
 from . import global_vars as gv
 from . import ebay_api
 from . import modes
@@ -346,7 +346,13 @@ class EbayScraperBot(commands.Bot):
         asyncio.create_task(modes.match(self))
         return True
 
-    async def send_listing_notification(self, item: EbayItem, ping_config: PingConfig, deal: DealTuple):
+    async def send_listing_notification(
+        self,
+        item: EbayItem,
+        ping_config: PingConfig,
+        deal: DealTuple,
+        match_object: Match
+    ) -> None:
         channel_id = ping_config.channel_id
         if not channel_id:
             logger.warning(f"No channel_id configured for {ping_config.category_name}")
@@ -357,7 +363,7 @@ class EbayScraperBot(commands.Bot):
             logger.error(f"Could not find channel with ID {channel_id}")
             return
 
-        embed, view = self.create_listing_embed_with_buttons(item, deal, ping_config)
+        embed, view = self.create_listing_embed_with_buttons(item, deal, ping_config, match_object)
 
         mention = f"<@&{ping_config.role}>"
 
@@ -373,21 +379,23 @@ class EbayScraperBot(commands.Bot):
         self,
         item: EbayItem,
         deal: DealTuple,
-        ping_config: PingConfig
+        ping_config: PingConfig,
+        match_object: Match
     ) -> tuple[discord.Embed, ListingButtonView]:
         view = ListingButtonView(item, ping_config)
-        embed = bot.create_listing_embed(item, deal)
+        embed = self.create_listing_embed(item, deal, match_object)
         return embed, view
 
     def create_listing_embed(
         self,
         item: EbayItem,
-        deal: DealTuple
+        deal: DealTuple,
+        match_object: Match
     ) -> discord.Embed:
         shipping = item.shipping[0] if item.shipping else None
         feedback_score = item.seller.feedback_score if item.seller.feedback_score is not None else "Unknown"
         condition = item.condition.name if (item.condition is not None and item.condition.name is not None) else "Unknown"  # noqa: E501
-        price = format_price(item.price.value) + " " + (item.price.currency or "USD")
+        price = format_price(price=item.price.value, currency=item.price.currency)
 
         embed = discord.Embed(
             color=deal.color,
@@ -400,13 +408,13 @@ class EbayScraperBot(commands.Bot):
 
         embed.add_field(
             name=f"{Emojis.PRICE} Price:",
-            value=price,
+            value=f"**{price}**",
             inline=True
         )
 
         embed.add_field(
             name=f"{Emojis.CONDITION} Condition:",
-            value=condition,
+            value=f"**{condition}**",
             inline=True
         )
 
@@ -414,6 +422,16 @@ class EbayScraperBot(commands.Bot):
             name=f"{Emojis.SHIPPING} Shipping:",
             value=build_shipping_embed_value(shipping),
             inline=True
+        )
+
+        embed.add_field(
+            name=f"{Emojis.PRICE} Criteria:",
+            value="\n".join([
+                f"- Max Price: **{format_price(match_object.max_price)}**",
+                f"- Min Price: **{format_price(match_object.min_price)}**",
+                f"- Target Price: **{format_price(match_object.target_price)}**",
+                # f"- Regex: `{match_object.regex}`"
+            ])
         )
 
         embed.add_field(
@@ -439,7 +457,8 @@ class EbayScraperBot(commands.Bot):
         )
 
         embed.set_footer(
-            text=f"eBay Item ID: {item.item_id}",
+            text=f"Friendly Name: \"{match_object.friendly_name}\"  •  Item ID: {item.item_id}",
+            # todo: find a better way to host this, maybe github or discord or my website or something
             icon_url="https://i.ibb.co/Cs9ZFL2C/Untitled-drawing-1.png",
         )
 

@@ -19,6 +19,8 @@ class Keyword:
     keyword: str
     min_price: int | None = None
     max_price: int | None = None
+    target_price: int | None = None
+    friendly_name: str | None = None
     deal_ranges: DealRanges | None = None
 
 

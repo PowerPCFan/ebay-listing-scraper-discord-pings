@@ -75,6 +75,8 @@
                                 "keyword": { "type": "string" },
                                 "min_price": { "type": ["integer", "null"] },
                                 "max_price": { "type": ["integer", "null"] },
+                                "target_price": { "type": ["integer", "null"] },
+                                "friendly_name": { "type": ["string", "null"] },
                                 "deal_ranges": {
                                     "type": ["object", "null"],
                                     "properties": {

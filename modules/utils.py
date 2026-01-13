@@ -129,7 +129,7 @@ def get_listing_type_display(buying_options: BuyingOptions) -> str:
         labels.append("Auction")
 
     if BuyingOption.FIXED_PRICE in buying_options:
-        text = "Buy It Now"
+        text = "**Buy It Now**"
 
         if BuyingOption.BEST_OFFER in buying_options:
             text += f" ({Emojis.OBO} or Best Offer)"
@@ -155,21 +155,25 @@ def generate_shipping_string(shipping: ShippingOption) -> str:
     shipping_string = "Internal Error"
 
     if shipping.type == ShippingType.CALCULATED:
-        shipping_string = "Calculated at Checkout"
+        shipping_string = "*Calculated at Checkout*"
     elif shipping.type == ShippingType.FIXED:
         if shipping.cost.value is not None and shipping.cost.value > 0:
-            shipping_string = format_price(shipping.cost.value) + " " + (shipping.cost.currency or "USD")
+            fp = format_price(price=shipping.cost.value, currency=shipping.cost.currency)
+            if fp == "Price unavailable":
+                shipping_string = "*Shipping cost unavailable*"
+            else:
+                shipping_string = f"**{fp}**"
         else:
-            shipping_string = "Free Shipping"
+            shipping_string = "**Free Shipping**"
     elif shipping.type == ShippingType.UNKNOWN:
-        shipping_string = "Unknown Shipping Type"
+        shipping_string = "*Unknown Shipping Type*"
 
     return shipping_string
 
 
 def build_shipping_embed_value(shipping: ShippingOption | None) -> str:
     if not shipping:
-        return "Shipping info not available"
+        return "*Shipping info not available*"
 
     shipping_cost = generate_shipping_string(shipping)
     arrival_info = ""

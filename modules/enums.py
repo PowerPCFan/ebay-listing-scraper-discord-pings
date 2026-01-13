@@ -136,6 +136,9 @@ class Match(NamedTuple):
     min_price: float | None
     max_price: float | None
     deal_ranges: DealRanges | None
+    target_price: int | None
+    friendly_name: str | None
+    regex: str | None
 
 
 class Emojis:
