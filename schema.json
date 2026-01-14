@@ -80,6 +80,7 @@
                                 "deal_ranges": {
                                     "type": ["object", "null"],
                                     "properties": {
+                                        "do_not_show": { "type": "array", "items": { "type": "string" } },
                                         "fire_deal": {
                                             "type": "object",
                                             "properties": {

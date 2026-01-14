@@ -154,6 +154,10 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
                     deal_ranges=matched.deal_ranges
                 )
 
+                if matched.deal_ranges and deal in matched.deal_ranges.do_not_show:
+                    logger.debug(f"Item rejected: deal type '{deal.name}' is in the do_not_show list")
+                    continue
+
                 await bot.send_listing_notification(item=item, ping_config=ping_config, deal=deal, match_object=matched)
 
                 seen_db.mark_seen(item.item_id, ping_config.category_name, item.title)

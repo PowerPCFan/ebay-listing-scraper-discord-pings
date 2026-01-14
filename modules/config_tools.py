@@ -1,7 +1,7 @@
 import json5
 from pathlib import Path
 from dataclasses import dataclass, field
-from .enums import PriceRange, DealRanges
+from .enums import PriceRange, DealRanges, Deal
 
 
 CONFIG_JSON_POSSIBLE = ["config.json", "config.jsonc", "config.json5"]
@@ -115,12 +115,20 @@ class Config:
                 for kw_data in ping_data["keywords"]:
                     deal_ranges = None
                     if "deal_ranges" in kw_data:
-                        deal_ranges_data = kw_data.pop("deal_ranges")
+                        deal_ranges_data: dict = kw_data.pop("deal_ranges")
+
+                        fire_deal: dict = deal_ranges_data.get("fire_deal", {"start": 0, "end": 0})
+                        great_deal: dict = deal_ranges_data.get("great_deal", {"start": 0, "end": 0})
+                        good_deal: dict = deal_ranges_data.get("good_deal", {"start": 0, "end": 0})
+                        ok_deal: dict = deal_ranges_data.get("ok_deal", {"start": 0, "end": 0})
+                        do_not_show: list[str] = deal_ranges_data.get("do_not_show", [])
+
                         deal_ranges = DealRanges(
-                            fire_deal=PriceRange(**deal_ranges_data.get("fire_deal", {"start": 0, "end": 0})),
-                            great_deal=PriceRange(**deal_ranges_data.get("great_deal", {"start": 0, "end": 0})),
-                            good_deal=PriceRange(**deal_ranges_data.get("good_deal", {"start": 0, "end": 0})),
-                            ok_deal=PriceRange(**deal_ranges_data.get("ok_deal", {"start": 0, "end": 0}))
+                            fire_deal=PriceRange(**fire_deal),
+                            great_deal=PriceRange(**great_deal),
+                            good_deal=PriceRange(**good_deal),
+                            ok_deal=PriceRange(**ok_deal),
+                            do_not_show=[getattr(Deal, dns.upper()) for dns in do_not_show]
                         )
 
                     keyword = Keyword(deal_ranges=deal_ranges, **kw_data)

@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import NamedTuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -19,6 +19,7 @@ class DealRanges:
     great_deal: PriceRange
     good_deal: PriceRange
     ok_deal: PriceRange
+    do_not_show: list[DealTuple] = field(default_factory=list)
 
     def get_deal_type(self, price: float) -> 'DealTuple':
         # determine deal based on price
