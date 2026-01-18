@@ -201,6 +201,8 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
     matching_friendly_name: str | None         = None   # noqa
     matching_deal_ranges:   DealRanges | None  = None   # noqa
 
+    last_updated = ping_config.price_ranges_last_updated
+
     for keyword_data in ping_config.keywords:
         keyword = keyword_data.keyword
         min_price = keyword_data.min_price
@@ -249,7 +251,8 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             target_price=None,
             friendly_name=None,
             deal_ranges=None,
-            regex=None
+            regex=None,
+            last_updated=last_updated
         )
 
     logger.debug(f"Item matched keyword '{matched_keyword}': {item.title}...")
@@ -263,7 +266,8 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
                 target_price=None,
                 friendly_name=None,
                 deal_ranges=None,
-                regex=None
+                regex=None,
+                last_updated=last_updated
             )
 
     if is_globally_blocked(title_lower, "", ""):
@@ -275,8 +279,10 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
                 target_price=None,
                 friendly_name=None,
                 deal_ranges=None,
-                regex=None
+                regex=None,
+                last_updated=last_updated
             )
+
     if is_seller_blocked(item.seller.username):
         logger.debug(f"Item rejected: seller '{item.seller.username}' is blocklisted")
         return Match(
@@ -286,7 +292,8 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             target_price=None,
             friendly_name=None,
             deal_ranges=None,
-            regex=None
+            regex=None,
+            last_updated=last_updated
         )
 
     if BuyingOption.FIXED_PRICE not in item.buying_options:
@@ -297,7 +304,8 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             target_price=None,
             friendly_name=None,
             deal_ranges=None,
-            regex=None
+            regex=None,
+            last_updated=last_updated
         )
 
     return Match(
@@ -307,5 +315,6 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
         target_price=matching_target_price,
         friendly_name=matching_friendly_name,
         deal_ranges=matching_deal_ranges,
-        regex=matched_keyword
+        regex=matched_keyword,
+        last_updated=last_updated
     )

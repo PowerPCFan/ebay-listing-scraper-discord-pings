@@ -144,7 +144,11 @@ class EbayItem:
 
         username = seller_obj.get("username", None)
         feedback_score = seller_obj.get("feedbackScore", None)
-        feedback_percentage = seller_obj.get("feedbackPercentage", None)
+        _fbp = seller_obj.get("feedbackPercentage", None)
+        feedback_percentage = float(_fbp) if _fbp is not None else None
+
+        if not feedback_percentage or feedback_percentage <= 0.0:
+            feedback_percentage = None
 
         return Seller(
             username=str(username) if username else None,

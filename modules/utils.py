@@ -287,3 +287,34 @@ async def change_status(bot: EbayScraperBot, logger: Any | None, message: str, e
             logger.exception("Failed to change Discord presence:")
 
     return None
+
+
+def determine_risk(
+    feedback_score: float | None,
+    positive_feedback: float | None,
+    title: str
+) -> tuple[bool, str | None]:
+    """
+    Determines the risk level of a listing based on seller attributes.
+
+    Returns a `tuple[bool, str | None]` where the `bool` indicates if the listing is high risk, and the `str` is an optional message describing the flag reason.
+    """  # noqa: E501
+
+    if feedback_score is None and positive_feedback is None:
+        return (True, "The seller has no feedback, which could indicate a new account or lack of sale history.")
+
+    if not positive_feedback or positive_feedback < 90.0:
+        positive_feedback = positive_feedback or 0.0
+        return (True, f"The seller has a low positive feedback percentage of {positive_feedback:.2f}%.")
+
+    if not feedback_score or feedback_score < 40:
+        feedback_score = feedback_score or 0.0
+        return (True, f"The seller has a low feedback score of {feedback_score:.0f}.")
+
+    # risky_keywords: list[str] = []
+
+    # for keyword in risky_keywords:
+    #     if keyword.lower() in title.lower():
+    #         return (True, f"The listing title contains the keyword '{keyword}'.")
+
+    return (False, None)

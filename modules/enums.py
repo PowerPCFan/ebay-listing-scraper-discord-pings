@@ -140,6 +140,7 @@ class Match(NamedTuple):
     target_price: int | None
     friendly_name: str | None
     regex: str | None
+    last_updated: str | None
 
 
 class Emojis:
@@ -150,7 +151,8 @@ class Emojis:
     SELLER = "<:seller:1453721027103428609>"
     CONDITION = "<:condition:1453722903609610504>"
     LISTING_TYPE = "<:listing_type:1453723643766112388>"
-    WARNING = "<:warning:1455577563425673403>"
+    # WARNING = "<:warning:1455577563425673403>"
+    WARNING = "⚠️"
     NICE = "<:nice:1459728762038911088>"
 
 

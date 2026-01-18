@@ -1,3 +1,4 @@
+import math
 import asyncio
 import logging
 import discord
@@ -24,7 +25,8 @@ from .utils import (
     sigint_current_process,
     restart_current_process,
     restart_current_process_2,
-    change_status
+    change_status,
+    determine_risk
 )
 
 
@@ -393,9 +395,22 @@ class EbayScraperBot(commands.Bot):
         match_object: Match
     ) -> discord.Embed:
         shipping = item.shipping[0] if item.shipping else None
-        feedback_score = item.seller.feedback_score if item.seller.feedback_score is not None else "Unknown"
         condition = item.condition.name if (item.condition is not None and item.condition.name is not None) else "Unknown"  # noqa: E501
         price = format_price(price=item.price.value, currency=item.price.currency)
+        last_updated = create_discord_timestamp(
+            timestamp=math.floor(
+                datetime.fromisoformat(
+                    match_object.last_updated or "1970-01-01T00:00:00+00:00"
+                ).timestamp()
+            ),
+            suffix="d"
+        )
+
+        risky, risk_message = determine_risk(
+            feedback_score=item.seller.feedback_score,
+            positive_feedback=item.seller.feedback_percentage,
+            title=item.title
+        )
 
         embed = discord.Embed(
             color=deal.color,
@@ -430,7 +445,8 @@ class EbayScraperBot(commands.Bot):
                 f"- Max Price: **{format_price(match_object.max_price)}**",
                 f"- Min Price: **{format_price(match_object.min_price)}**",
                 f"- Target Price: **{format_price(match_object.target_price)}**",
-                # f"- Regex: `{match_object.regex}`"
+                # i don't think -# works in embeds but it doesnt show as a literal either so why not
+                f"-# *Last updated:* {last_updated}"
             ])
         )
 
@@ -438,8 +454,8 @@ class EbayScraperBot(commands.Bot):
             name=f"{Emojis.SELLER} Seller:",
             value=(
                 f"- Username: [{item.seller.username}]({get_ebay_seller_url(item.seller.username)})\n"
-                f"- **{feedback_score}** feedback score\n"
-                f"- **{item.seller.feedback_percentage}%** positive feedback"
+                f"- **{item.seller.feedback_score or "Unknown"}** feedback score\n"
+                f"- **{item.seller.feedback_percentage or "0"}%** positive feedback"
             ),
             inline=False,
         )
@@ -456,10 +472,21 @@ class EbayScraperBot(commands.Bot):
             inline=False
         )
 
+        if risky:
+            if risk_message:
+                message = risk_message
+            else:
+                message = "This seller was flagged as potentially risky. Please use caution when purchasing."
+
+            embed.add_field(
+                name=f"{Emojis.WARNING} Warning:",
+                value=message,
+                inline=False
+            )
+
         embed.set_footer(
             text=f"Friendly Name: \"{match_object.friendly_name}\"  •  Item ID: {item.item_id}",
-            # todo: find a better way to host this, maybe github or discord or my website or something
-            icon_url="https://i.ibb.co/Cs9ZFL2C/Untitled-drawing-1.png",
+            icon_url="https://raw.githubusercontent.com/PowerPCFan/ebay-listing-scraper-discord-pings/refs/heads/master/static/img/ebay-favicon.png",  # noqa: E501
         )
 
         if item.main_image:
