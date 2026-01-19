@@ -270,7 +270,7 @@ def restart_current_process_2() -> None:
     sys.exit(0)
 
 
-async def change_status(bot: EbayScraperBot, logger: Any | None, message: str, emoji: str | None = None) -> None:
+async def change_status(bot: 'EbayScraperBot', logger: Any | None, message: str, emoji: str | None = None) -> None:
     try:
         status_message = f"{emoji} {message}" if emoji else message
 
