@@ -42,7 +42,10 @@ async def match(bot: "EbayScraperBot") -> None:
 
                 await change_status(bot=bot, logger=logger, message=f"Sleeping until {end}...", emoji="😴")
             else:
+                seen_db.clear_temp_seen()
                 await match_single_cycle(bot)
+
+                seen_db.commit_seen_items()
 
                 logger.info("Polling interval complete.")
                 logger.debug(f"API calls made: {gv.api_call_count}")
@@ -155,7 +158,11 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
                 )
 
                 if matched.deal_ranges and deal in matched.deal_ranges.do_not_show:
-                    logger.debug(f"Item rejected: deal type '{deal.name}' is in the do_not_show list")
+                    logger.debug(f"Item rejected: deal type '{deal.name}' is in the keyword-level do_not_show list")
+                    continue
+
+                if ping_config.do_not_show and deal in ping_config.do_not_show:
+                    logger.debug(f"Item rejected: deal type '{deal.name}' is in the category-level do_not_show list")
                     continue
 
                 await bot.send_listing_notification(item=item, ping_config=ping_config, deal=deal, match_object=matched)

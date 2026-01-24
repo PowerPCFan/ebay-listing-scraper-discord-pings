@@ -49,6 +49,7 @@ class PingConfig:
     price_ranges_last_updated: str = "1970-01-01T00:00:00.000+00:00"
     exclude_keywords: list[str] = field(default_factory=list)
     blocklist_override: list[str] = field(default_factory=list)
+    do_not_show: list[Deal] = field(default_factory=list)
 
 
 @dataclass
@@ -134,6 +135,9 @@ class Config:
                     keyword = Keyword(deal_ranges=deal_ranges, **kw_data)
                     keywords.append(keyword)
                 ping_data["keywords"] = keywords
+
+            if "do_not_show" in ping_data:
+                ping_data["do_not_show"] = [getattr(Deal, dns.upper()) for dns in ping_data["do_not_show"]]
 
             pings.append(PingConfig(**ping_data))
 

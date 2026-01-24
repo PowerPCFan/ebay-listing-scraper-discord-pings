@@ -11,3 +11,4 @@
 - stop debug logs from going to discord (i thought i did that before lol)
   - fix logging in general its so messy
   - also maybe use the bot instead of a webhook for logging? or will that make the user facing messages take longer to send
+- update amd_gpu.py, nvidia_gpu.py, and amd_cpu.py for the latest config keys added
