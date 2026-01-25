@@ -163,7 +163,7 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
                     logger.debug(f"Item rejected: deal type '{deal.name}' is in the category-level do_not_show list")
                     continue
 
-                logger.info(f"New matching listing: '{item.title}' - ${f'item.price.value':.2f} ({deal.name})")
+                logger.info(f"New matching listing: '{item.title}' - ${item.price.value:.2f} ({deal.name})")
 
                 await bot.send_listing_notification(item=item, ping_config=ping_config, deal=deal, match_object=matched)
 
