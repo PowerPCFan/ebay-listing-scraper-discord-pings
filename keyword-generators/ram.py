@@ -4,22 +4,18 @@ import argparse
 from typing import Any
 
 
-WITH_MHZ    = "regexp::\\b{capacity}[\\s_-]*(gigabytes|gigabyte|gigs|gig|gib|gb|g).*?({ddr})[\\s_-]*({mhz})[\\s_-]*(mt\\/s|mhz|mt)?"  # noqa: E501, E221
-WITHOUT_MHZ = "regexp::\\b{capacity}[\\s_-]*(gigabytes|gigabyte|gigs|gig|gib|gb|g).*?({ddr})\\b"
+WITH_MHZ = "regexp::(?=.*(?:{capacity})[\\s_-]*(?:gigabytes|gigabyte|gib|gb|g))(?=.*{ddr})(?=.*(?:{mhz})).*"  # noqa: E501
 
 
 def generate_keyword_block(
     capacity: str,
     ddr_type: str,
-    speed: str | None,
+    speed: str,
     min_price: int,
     max_price: int | None,
     target_price: int,
 ) -> dict[str, Any]:
-    if speed:
-        regex = WITH_MHZ.format(capacity=capacity, ddr=ddr_type, mhz=speed)
-    else:
-        regex = WITHOUT_MHZ.format(capacity=capacity, ddr=ddr_type)
+    regex = WITH_MHZ.format(capacity=capacity, ddr=ddr_type, mhz=speed)
 
     if max_price is not None:
         print("Warning: Using --max-price is discouraged as it bypasses the dynamic max price calculation.")
@@ -159,7 +155,7 @@ if __name__ == "__main__":
 
         parser.add_argument("--capacity", type=str, help="RAM Capacity - just a number (for example, 16 = 16GB)")
         parser.add_argument("--ddr", type=str, help="DDR Type - like 'DDR4' or 'DDR5'")
-        parser.add_argument("--speed", type=str, help="RAM Speed - optional, use None in your comma-separated list to omit")  # noqa: E501
+        parser.add_argument("--speed", type=str, help="RAM Speed - like '3200', '3600', etc.")
         parser.add_argument("--min-price", type=str, help="Minimum Price(s)")
         parser.add_argument("--max-price", type=str, help="Maximum Price(s)")
         parser.add_argument("--target-price", type=str, help="Target Price(s)")
@@ -168,7 +164,7 @@ if __name__ == "__main__":
 
         capacities = parse_comma_separated(args.capacity, 'str')
         ddr_types = parse_comma_separated(args.ddr, 'str')
-        speeds = parse_comma_separated(args.speed, 'str_or_none')
+        speeds = parse_comma_separated(args.speed, 'str')
         min_prices = parse_comma_separated(args.min_price, 'int')
         max_prices = parse_comma_separated(args.max_price, 'int')
         target_prices = parse_comma_separated(args.target_price, 'int')
