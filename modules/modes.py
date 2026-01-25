@@ -146,8 +146,6 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
             matched = matches_ping_criteria(item, ping_config)
 
             if matched.is_match:
-                logger.info(f"New matching listing: {item.title}... - ${item.price.value}")
-
                 price = _get_item_price(item, include_shipping=gv.config.include_shipping_in_deal_evaluation)
 
                 deal = evaluate_deal(
@@ -164,6 +162,8 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
                 if ping_config.do_not_show and deal in ping_config.do_not_show:
                     logger.debug(f"Item rejected: deal type '{deal.name}' is in the category-level do_not_show list")
                     continue
+
+                logger.info(f"New matching listing: '{item.title}' - ${f'item.price.value':.2f} ({deal.name})")
 
                 await bot.send_listing_notification(item=item, ping_config=ping_config, deal=deal, match_object=matched)
 

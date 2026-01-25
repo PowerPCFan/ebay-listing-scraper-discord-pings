@@ -1,7 +1,7 @@
 import json5
 from pathlib import Path
 from dataclasses import dataclass, field
-from .enums import PriceRange, DealRanges, Deal
+from .enums import PriceRange, DealRanges, Deal, DealTuple
 
 
 CONFIG_JSON_POSSIBLE = ["config.json", "config.jsonc", "config.json5"]
@@ -49,7 +49,7 @@ class PingConfig:
     price_ranges_last_updated: str = "1970-01-01T00:00:00.000+00:00"
     exclude_keywords: list[str] = field(default_factory=list)
     blocklist_override: list[str] = field(default_factory=list)
-    do_not_show: list[Deal] = field(default_factory=list)
+    do_not_show: list[DealTuple] = field(default_factory=list)
 
 
 @dataclass
