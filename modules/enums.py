@@ -190,7 +190,7 @@ class DealTuple(NamedTuple):
 
 class Deal:
     """
-    Each value is a `_DealTuple` - `(name: str, emoji: str, color: int)`.
+    Each value is a `DealTuple` - `(name: str, emoji: str, color: int)`.
     """
 
     FIRE_DEAL = DealTuple(

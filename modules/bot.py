@@ -109,6 +109,7 @@ class NotificationToggleButton(discord.ui.Button):
                     ),
                     ephemeral=True
                 )
+                logger.info(f"Removed role @{role.name} from user @{member.name} (method: notifications button)")
             elif role not in member.roles:
                 await member.add_roles(role)
                 await interaction.followup.send(
@@ -119,6 +120,7 @@ class NotificationToggleButton(discord.ui.Button):
                     ),
                     ephemeral=True
                 )
+                logger.info(f"Added role @{role.name} to user @{member.name} (method: notifications button)")
             else:
                 raise Exception("Unexpected role state.")
         except discord.Forbidden:
@@ -577,7 +579,7 @@ class SelfRoleButton(discord.ui.Button):
                     ),
                     ephemeral=True
                 )
-                logger.info(f"Removed role @{role.name} from user @{member.name}")
+                logger.info(f"Removed role @{role.name} from user @{member.name} (method: role picker button)")
             else:
                 await member.add_roles(role)
                 await interaction.response.send_message(
@@ -588,7 +590,7 @@ class SelfRoleButton(discord.ui.Button):
                     ),
                     ephemeral=True
                 )
-                logger.info(f"Added role @{role.name} to user @{member.name}")
+                logger.info(f"Added role @{role.name} to user @{member.name} (method: role picker button)")
         except discord.Forbidden:
             await interaction.response.send_message(
                 embed=discord.Embed(

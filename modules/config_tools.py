@@ -136,8 +136,9 @@ class Config:
                     keywords.append(keyword)
                 ping_data["keywords"] = keywords
 
-            if "do_not_show" in ping_data:
-                ping_data["do_not_show"] = [getattr(Deal, dns.upper()) for dns in ping_data["do_not_show"]]
+            dns = ping_data.get("do_not_show")
+            if dns:
+                ping_data["do_not_show"] = [getattr(Deal, a.upper()) for a in dns]
 
             pings.append(PingConfig(**ping_data))
 
