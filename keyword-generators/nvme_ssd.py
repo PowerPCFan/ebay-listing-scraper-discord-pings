@@ -9,11 +9,11 @@ exclusions = [
     f"\\b{exclusion.replace(" ", "\\s*")}\\b"
     for exclusion in [
         "Notebook", "Desktop", "PC", "DDR\\d", "RAM", "HDD", "Hard Disk",
-        "Hard Drive", "External", "USB", "Portable", "\\d{4} RPM", "SATA",
+        "Hard Drive", "External", "USB", "Portable", "\\d{4} RPM",
         "eMMC", "flash drive", "sd card", "memory card", "memory stick"
     ]
 ]
-exclusions.extend(["2\\.5", "3\\.5"])  # to avoid word boundary on these
+exclusions.extend(["2\\.5", "3\\.5", "SATA"])  # to avoid word boundary on these
 exclusions = "|".join(exclusions)
 
 keywords = "|".join([
@@ -23,9 +23,9 @@ keywords = "|".join([
     ]
 ])
 
-GB_TB: str = "regexp::(?!.*(?:{exclusion}))(?=.*(?:{gb}[\\s_-]*(?:GiB|GB|G)|{tb}[\\s_-]*(?:TiB|TB|T)))(?=.*(?:{keywords})).*"  # noqa: E501
-GB: str = "regexp::(?!.*(?:{exclusion}))(?=.*(?:{gb}[\\s_-]*(?:GiB|GB|G)))(?=.*(?:{keywords})).*"
-TB: str = "regexp::(?!.*(?:{exclusion}))(?=.*(?:{tb}[\\s_-]*(?:TiB|TB|T)))(?=.*(?:{keywords})).*"
+GB_TB: str = "regexp::(?!.*(?:{exclusion}))(?=.*(?:{gb}[\\s_-]*(?:GiB|GB|G\\b)|{tb}[\\s_-]*(?:TiB|TB|T\\b)))(?=.*(?:{keywords})).*"  # noqa: E501
+GB: str = "regexp::(?!.*(?:{exclusion}))(?=.*(?:{gb}[\\s_-]*(?:GiB|GB|G\\b)))(?=.*(?:{keywords})).*"
+TB: str = "regexp::(?!.*(?:{exclusion}))(?=.*(?:{tb}[\\s_-]*(?:TiB|TB|T\\b)))(?=.*(?:{keywords})).*"
 
 
 def generate_keyword_block(

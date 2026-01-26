@@ -656,7 +656,7 @@ def setup_commands(bot: EbayScraperBot):
 
     @bot.tree.command(name='start', description="Start the eBay listing scraper (when in start_on_command mode)")
     @commands.is_owner()
-    async def start_command(interaction: discord.Interaction):
+    async def start_command(interaction: discord.Interaction, ephemeral: bool = True):
         if not gv.config.start_on_command:
             embed = discord.Embed(
                 title="Cannot Start",
@@ -664,7 +664,7 @@ def setup_commands(bot: EbayScraperBot):
                 color=discord.Color.red(),
                 timestamp=discord.utils.utcnow()
             )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
             return
 
         started = await bot.start_scraper()
@@ -682,11 +682,11 @@ def setup_commands(bot: EbayScraperBot):
                 color=discord.Color.orange(),
                 timestamp=discord.utils.utcnow()
             )
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @bot.tree.command(name='reload-config', description="Reload the script's config.json file")
     @commands.is_owner()
-    async def reload_config_command(interaction: discord.Interaction):
+    async def reload_config_command(interaction: discord.Interaction, ephemeral: bool = True):
         try:
             gv.config = reload_config()
 
@@ -696,7 +696,7 @@ def setup_commands(bot: EbayScraperBot):
                 color=discord.Color.green(),
                 timestamp=discord.utils.utcnow()
             )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
             logger.info("Configuration reloaded via /reload-config command")
 
@@ -707,12 +707,12 @@ def setup_commands(bot: EbayScraperBot):
                 color=discord.Color.red(),
                 timestamp=discord.utils.utcnow()
             )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
             logger.error(f"Failed to reload config via Discord: {e}")
 
     @bot.tree.command(name='estimate-daily-api-calls', description="Estimate the number of eBay API calls made per day based on current config")  # noqa: E501
     @commands.is_owner()
-    async def estimate_daily_api_calls_command(interaction: discord.Interaction):
+    async def estimate_daily_api_calls_command(interaction: discord.Interaction, ephemeral: bool = False):
         try:
             all_categories = set()
             for ping in gv.config.pings:
@@ -798,7 +798,7 @@ def setup_commands(bot: EbayScraperBot):
                     value=f"{api_calls_per_day:.0f} calls/day is within eBay's rate limit of {rate_limit} calls/day. {Emojis.NICE}"  # noqa: E501
                 )
 
-            await interaction.response.send_message(embed=embed)
+            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
         except Exception as e:
             await interaction.response.send_message(
@@ -807,7 +807,8 @@ def setup_commands(bot: EbayScraperBot):
                     description=f"Error calculating daily API calls: {type(e).__name__}",
                     color=discord.Color.red(),
                     timestamp=discord.utils.utcnow()
-                )
+                ),
+                ephemeral=ephemeral
             )
 
     @bot.tree.command(name='ping', description="Measure bot latency")

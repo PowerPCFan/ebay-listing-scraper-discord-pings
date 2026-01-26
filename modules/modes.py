@@ -33,7 +33,7 @@ async def match(bot: "EbayScraperBot") -> None:
     while True:
         try:
             if is_within_sleep_hours():
-                logger.debug("Currently within sleep hours - skipping scrape cycle...")
+                logger.info("Currently within sleep hours, skipping current interval.")
 
                 if gv.config.sleep_hours:
                     end = datetime.fromisoformat(f"1970-01-01T{gv.config.sleep_hours.end}").strftime("%H:%M %Z")
