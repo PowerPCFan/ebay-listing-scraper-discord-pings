@@ -5,10 +5,24 @@ import json
 import argparse
 from typing import Any
 
+exclusions = "|".join([
+    f"\\b{exclusion.replace(" ", "\\s*")}\\b"
+    for exclusion in [
+        "Notebook", "Desktop", "PC", "DDR\\d", "RAM", "HDD", "Hard Disk",
+        "Hard Drive", "External", "USB", "Portable", "\\d{4} RPM"
+    ]
+])
 
-GB_TB: str = "regexp::(?!.*(?:\\bNotebook\\b|\\bDesktop\\b|\\bPC\\b|\\bDDR\\d\\b|\\bRAM\\b))(?=.*(?:{gb}[\\s_-]*(?:GiB|GB|G)|{tb}[\\s_-]*(?:TiB|TB|T)))(?=.*(?:SSD|NVMe|SATA|M\\.2|Drive|Solid State|SDD|2\\.5)).*"  # noqa: E501
-GB: str = "regexp::(?!.*(?:\\bNotebook\\b|\\bDesktop\\b|\\bPC\\b|\\bDDR\\d\\b|\\bRAM\\b))(?=.*(?:{gb}[\\s_-]*(?:GiB|GB|G)))(?=.*(?:SSD|NVMe|SATA|M\\.2|Drive|Solid State|SDD|2\\.5)).*"  # noqa: E501
-TB: str = "regexp::(?!.*(?:\\bNotebook\\b|\\bDesktop\\b|\\bPC\\b|\\bDDR\\d\\b|\\bRAM\\b))(?=.*(?:{tb}[\\s_-]*(?:TiB|TB|T)))(?=.*(?:SSD|NVMe|SATA|M\\.2|Drive|Solid State|SDD|2\\.5)).*"  # noqa: E501
+keywords = "|".join([
+    keyword.replace(".", "\\.").replace(" ", "\\s*")
+    for keyword in [
+        "SSD", "NVMe", "SATA", "M.2", "Drive", "Solid State", "SDD", "2.5"
+    ]
+])
+
+GB_TB: str = "regexp::(?!.*(?:{exclusion}))(?=.*(?:{gb}[\\s_-]*(?:GiB|GB|G)|{tb}[\\s_-]*(?:TiB|TB|T)))(?=.*(?:{keywords})).*"  # noqa: E501
+GB: str = "regexp::(?!.*(?:{exclusion}))(?=.*(?:{gb}[\\s_-]*(?:GiB|GB|G)))(?=.*(?:{keywords})).*"
+TB: str = "regexp::(?!.*(?:{exclusion}))(?=.*(?:{tb}[\\s_-]*(?:TiB|TB|T)))(?=.*(?:{keywords})).*"
 
 
 def generate_keyword_block(
@@ -22,13 +36,13 @@ def generate_keyword_block(
 
     if gb is not None and tb is not None:
         mode = "GB_TB"
-        regex = GB_TB.format(gb=gb, tb=tb)
+        regex = GB_TB.format(exclusion=exclusions, keywords=keywords, gb=gb, tb=tb)
     elif gb is not None and tb is None:
         mode = "GB"
-        regex = GB.format(gb=gb)
+        regex = GB.format(exclusion=exclusions, keywords=keywords, gb=gb)
     elif gb is None and tb is not None:
         mode = "TB"
-        regex = TB.format(tb=tb)
+        regex = TB.format(exclusion=exclusions, keywords=keywords, tb=tb)
     else:
         raise ValueError("Either --gb or --tb must be specified.")
 
