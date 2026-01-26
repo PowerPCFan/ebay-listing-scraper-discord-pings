@@ -5,18 +5,21 @@ import json
 import argparse
 from typing import Any
 
-exclusions = "|".join([
+exclusions = [
     f"\\b{exclusion.replace(" ", "\\s*")}\\b"
     for exclusion in [
         "Notebook", "Desktop", "PC", "DDR\\d", "RAM", "HDD", "Hard Disk",
-        "Hard Drive", "External", "USB", "Portable", "\\d{4} RPM"
+        "Hard Drive", "External", "USB", "Portable", "\\d{4} RPM", "SATA",
+        "eMMC", "flash drive", "sd card", "memory card", "memory stick"
     ]
-])
+]
+exclusions.extend(["2\\.5", "3\\.5"])  # to avoid word boundary on these
+exclusions = "|".join(exclusions)
 
 keywords = "|".join([
     keyword.replace(".", "\\.").replace(" ", "\\s*")
     for keyword in [
-        "SSD", "NVMe", "SATA", "M.2", "Drive", "Solid State", "SDD", "2.5"
+        "SSD", "NVMe", "M.2", "Solid State", "SDD"
     ]
 ])
 
