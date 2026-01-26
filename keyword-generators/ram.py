@@ -4,7 +4,7 @@ import argparse
 from typing import Any
 
 
-WITH_MHZ = "regexp::(?=.*(?:{capacity})[\\s_-]*(?:gigabytes|gigabyte|gib|gb|g))(?=.*{ddr})(?=.*(?:{mhz})).*"  # noqa: E501
+WITH_MHZ = "regexp::(?=.*(?:{capacity})[\\s_-]*(?:gigabytes|gigabyte|gib|gb|g\\b))(?=.*{ddr})(?=.*(?:{mhz})).*"  # noqa: E501
 
 
 def generate_keyword_block(
