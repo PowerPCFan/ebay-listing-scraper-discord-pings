@@ -11,7 +11,7 @@ exclusions = [
         "Notebook", "Desktop", "PC", "DDR\\d", "RAM", "HDD", "Hard Disk",
         "Hard Drive", "External", "USB", "Portable", "\\d{4} RPM",
         "eMMC", "flash drive", "sd card", "memory card", "memory stick",
-        "2230"
+        "2230", "2242"
     ]
 ]
 exclusions.extend(["2\\.5", "3\\.5", "SATA"])  # to avoid word boundary on these
