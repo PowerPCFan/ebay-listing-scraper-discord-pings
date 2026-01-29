@@ -24,9 +24,9 @@ keywords = "|".join([
     ]
 ])
 
-GB_TB: str = "regexp::(?!.*(?:{exclusion}))(?=.*(?:{gb}[\\s_-]*(?:GiB|GB|G\\b)|{tb}[\\s_-]*(?:TiB|TB|T\\b)))(?=.*(?:{keywords})).*"  # noqa: E501
-GB: str = "regexp::(?!.*(?:{exclusion}))(?=.*(?:{gb}[\\s_-]*(?:GiB|GB|G\\b)))(?=.*(?:{keywords})).*"
-TB: str = "regexp::(?!.*(?:{exclusion}))(?=.*(?:{tb}[\\s_-]*(?:TiB|TB|T\\b)))(?=.*(?:{keywords})).*"
+GB_TB: str = "regexp::^(?!.*(?:{exclusion}))(?=.*(?:{gb}[\\s_-]*(?:GiB|GB|G\\b)|{tb}[\\s_-]*(?:TiB|TB|T\\b)))(?=.*(?:{keywords})).*"  # noqa: E501
+GB: str = "regexp::^(?!.*(?:{exclusion}))(?=.*(?:{gb}[\\s_-]*(?:GiB|GB|G\\b)))(?=.*(?:{keywords})).*"
+TB: str = "regexp::^(?!.*(?:{exclusion}))(?=.*(?:{tb}[\\s_-]*(?:TiB|TB|T\\b)))(?=.*(?:{keywords})).*"
 
 
 def generate_keyword_block(
