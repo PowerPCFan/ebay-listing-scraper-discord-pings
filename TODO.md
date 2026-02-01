@@ -4,7 +4,6 @@
 - maybe combine the self roles thing with the ping configs / keyword configs instead of separate since they share a role and name and stuff
 - add priority listings that poll more often
 - improve seller flagging system
-- this is probably possible by copying channel id across multiple areas of the configuration file, but make sure it's possible to have multiple ping configs going to the same channel
 - as long as this isn't against ebay terms of service and as long as rate limits are per api key and not per ip, create a second developer account and set up a dual API system to double the amount of daily calls available
 - note: lots of the above suggestions to myself are meant to save API calls, this is so I can do more calls and more often searches across more categories improving the scraper overall
 - write docstrings (some but not all have been written)

@@ -1,3 +1,4 @@
+import math
 from enum import Enum
 from typing import NamedTuple
 from dataclasses import dataclass, field
@@ -13,6 +14,16 @@ class PriceRange:
         return self.start <= price <= self.end
 
 
+def rounding_as_taught_in_school(val: float) -> int:
+    """applescript reference hehe"""
+
+    floored = math.floor(val)
+
+    if val - floored < 0.5:
+        return floored
+    return math.ceil(val)
+
+
 @dataclass
 class DealRanges:
     fire_deal: PriceRange
@@ -21,8 +32,9 @@ class DealRanges:
     ok_deal: PriceRange
     do_not_show: list['DealTuple'] = field(default_factory=list)
 
-    def get_deal_type(self, price: float) -> 'DealTuple':
-        # determine deal based on price
+    def get_deal_type(self, float_price: float) -> 'DealTuple':
+        price = rounding_as_taught_in_school(float_price)
+
         if self.fire_deal.contains(price):
             return Deal.FIRE_DEAL
         elif self.great_deal.contains(price):
