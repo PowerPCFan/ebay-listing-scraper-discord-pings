@@ -1,7 +1,6 @@
 import sys
 import json
 import argparse
-import textwrap
 from typing import Any
 
 
@@ -40,6 +39,8 @@ def generate_keyword_block(
         "keyword": regex,
         "min_price": min_price,
         "max_price": max_price,
+        "target_price": target_price,
+        "friendly_name": f"Ryzen {ryzen} {model}" + (f"{suffix}" if suffix else ""),
         "deal_ranges": {
             "fire_deal": {"start": fire_start, "end": fire_end},
             "great_deal": {"start": great_start, "end": great_end},
@@ -144,38 +145,7 @@ def main(
         )
         results.append(block)
 
-    if len(results) == 1:
-        raw_output = textwrap.indent(text=json.dumps(results[0], indent=4), prefix="                ")
-        output_lines = raw_output.splitlines()
-        ryzen = ryzens[0]
-        model = models[0]
-        suffix = suffixes[0]
-        target_price = target_prices[0]
-        for i, line in enumerate(output_lines):
-            if '"keyword":' in line:
-                cpu_name = f"Ryzen {ryzen} {model}{suffix if suffix else ''}"
-                output_lines[i] = line + f"  // {cpu_name} (Target Price ${target_price})"
-                break
-
-        output = "\n".join(output_lines)
-        print(output)
-    else:
-        output = json.dumps(results, indent=4)
-        lines = output.splitlines()
-
-        result_index = 0
-        for i, line in enumerate(lines):
-            if '"keyword":' in line and result_index < len(models):
-                ryzen = ryzens[result_index]
-                model = models[result_index]
-                suffix = suffixes[result_index]
-                target_price = target_prices[result_index]
-                cpu_name = f"R{ryzen} {model}{suffix if suffix else ''}"
-                comment = f"  // {cpu_name} (Target Price ${target_price})"
-                lines[i] = line + comment
-                result_index += 1
-
-        print("\n".join(lines))
+    print(json.dumps(results[0] if len(results) == 1 else results, indent=4))
 
 
 if __name__ == "__main__":
