@@ -23,10 +23,6 @@
         "discord_guild_id": { "type": "integer" },
         "admin_role_id": { "type": "integer" },
 
-        "global_blocklist": {
-            "type": "array",
-            "items": { "type": "string" }
-        },
         "seller_blocklist": {
             "type": "array",
             "items": { "type": "string" }
@@ -175,7 +171,6 @@
         "ebay_dev_id",
         "discord_bot_token",
         "discord_guild_id",
-        "global_blocklist",
         "seller_blocklist",
         "condition_blocklist",
         "pings"

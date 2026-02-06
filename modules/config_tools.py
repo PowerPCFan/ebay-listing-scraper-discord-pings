@@ -13,6 +13,46 @@ for filename in CONFIG_JSON_POSSIBLE:
         CONFIG_JSON = path
         break
 
+GLOBAL_BLOCKLIST_TXT = Path(__file__).parent.parent / "global_blocklist.txt"
+
+
+@dataclass
+class GlobalBlocklist:
+    items: list[str] = field(default_factory=list)
+
+    @staticmethod
+    def load() -> "GlobalBlocklist":
+        if not GLOBAL_BLOCKLIST_TXT.exists():
+            GLOBAL_BLOCKLIST_TXT.touch()
+            return GlobalBlocklist()
+
+        with open(GLOBAL_BLOCKLIST_TXT, 'r', encoding='utf-8') as f:
+            lines = [line.strip() for line in f.readlines() if line.strip()]
+
+        return GlobalBlocklist(items=lines)
+
+    def save(self) -> None:
+        with open(GLOBAL_BLOCKLIST_TXT, 'w', encoding='utf-8') as f:
+            for item in self.items:
+                f.write(f"{item}\n")
+
+    def add(self, item: str) -> bool:
+        item = item.strip().lower()
+        if item and item not in [i.lower() for i in self.items]:
+            self.items.append(item)
+            self.save()
+            return True
+        return False
+
+    def remove(self, item: str) -> bool:
+        item = item.strip().lower()
+        for i, existing_item in enumerate(self.items):
+            if existing_item.lower() == item:
+                self.items.pop(i)
+                self.save()
+                return True
+        return False
+
 
 @dataclass
 class Keyword:
@@ -80,7 +120,6 @@ class Config:
     discord_guild_id: int
     admin_role_id: int
 
-    global_blocklist: list[str]
     seller_blocklist: list[str]
     condition_blocklist: list[int]
 
@@ -161,6 +200,10 @@ class Config:
 
 def reload_config() -> Config:
     return Config.load()
+
+
+def reload_global_blocklist() -> GlobalBlocklist:
+    return GlobalBlocklist.load()
 
 
 def get_raw_config() -> str:

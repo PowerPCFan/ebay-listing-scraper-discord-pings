@@ -5,7 +5,7 @@ import asyncio
 import inspect
 import modules.ebay_api as ebay_api
 from modules import global_vars as gv
-from modules.config_tools import reload_config
+from modules.config_tools import reload_config, reload_global_blocklist
 from modules.logger import logger
 from modules.bot import bot as discord_bot
 from typing import Callable, Coroutine, Any
@@ -20,9 +20,10 @@ async def command_listener() -> None:
     prefix = ":"
 
     def _reload_config() -> None:
-        logger.info("Reloading configuration...")
+        logger.info("Reloading config and global blocklist...")
         gv.config = reload_config()
-        logger.info("Configuration reloaded!")
+        gv.global_blocklist = reload_global_blocklist()
+        logger.info("Reloaded!")
 
     def _exit() -> None:
         logger.info("Exiting application.")

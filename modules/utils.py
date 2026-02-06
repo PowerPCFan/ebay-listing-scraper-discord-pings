@@ -72,12 +72,12 @@ def is_within_sleep_hours() -> bool:
 
 
 def is_globally_blocked(content: str, extra1: str = "", extra2: str = "") -> bool:
-    if not gv.config.global_blocklist:
+    if not gv.global_blocklist.items:
         return False
 
     content_to_check = f"{content} {extra1} {extra2}".lower().strip()
 
-    for blocked_pattern in gv.config.global_blocklist:
+    for blocked_pattern in gv.global_blocklist.items:
         if matches_pattern(content_to_check, blocked_pattern):
             return True
 

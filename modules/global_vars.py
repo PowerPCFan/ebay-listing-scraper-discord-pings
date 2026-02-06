@@ -1,7 +1,8 @@
-from .config_tools import Config
+from .config_tools import Config, GlobalBlocklist
 from .rolepicker_config_tools import RolePickerStates
 
 config: Config = Config.load()
+global_blocklist: GlobalBlocklist = GlobalBlocklist.load()
 role_picker_states: RolePickerStates = RolePickerStates.load()
 
 api_call_count: int = 0  # self explanatory, amount of api calls per interval

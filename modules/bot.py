@@ -8,7 +8,7 @@ from discord.ext import commands
 from discord import app_commands
 from urllib.parse import quote
 from .logger import logger, discordPyLevelValue
-from .config_tools import PingConfig, reload_config, SelfRoleGroup, SelfRole
+from .config_tools import PingConfig, reload_config, reload_global_blocklist, SelfRoleGroup, SelfRole
 from .rolepicker_config_tools import RolePickerRole, RolePickerState
 from .ebay_api import EbayItem
 from .enums import ConditionEnum, DealTuple, Emojis, Match
@@ -710,6 +710,125 @@ def setup_commands(bot: EbayScraperBot):
             await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
             logger.error(f"Failed to reload config via Discord: {e}")
 
+    @bot.tree.command(
+        name='reload-global-blocklist',
+        description="Reload the global blocklist from global_blocklist.txt"
+    )
+    @commands.is_owner()
+    async def reload_global_blocklist_command(interaction: discord.Interaction, ephemeral: bool = True):
+        try:
+            gv.global_blocklist = reload_global_blocklist()
+
+            embed = discord.Embed(
+                title="Global Blocklist Reloaded",
+                description=f"Successfully reloaded global blocklist with {len(gv.global_blocklist.items)} items.",
+                color=discord.Color.green(),
+                timestamp=discord.utils.utcnow()
+            )
+
+            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+            logger.info("Global blocklist reloaded via /reload-global-blocklist command")
+
+        except Exception as e:
+            embed = discord.Embed(
+                title="Global Blocklist Reload Failed",
+                description=f"Error: {str(e)}",
+                color=discord.Color.red(),
+                timestamp=discord.utils.utcnow()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+            logger.error(f"Failed to reload global blocklist via Discord: {e}")
+
+    @bot.tree.command(
+        name='add-to-global-blocklist',
+        description="Add a keyword or phrase to the global blocklist"
+    )
+    @commands.is_owner()
+    async def add_to_global_blocklist_command(interaction: discord.Interaction, keyword: str, ephemeral: bool = True):
+        try:
+            success = gv.global_blocklist.add(keyword)
+
+            if success:
+                embed = discord.Embed(
+                    title="Added to Global Blocklist",
+                    description=f"Successfully added '{keyword}' to the global blocklist.",
+                    color=discord.Color.green(),
+                    timestamp=discord.utils.utcnow()
+                )
+                logger.info(f"Added '{keyword}' to global blocklist via Discord command")
+            else:
+                embed = discord.Embed(
+                    title="Already in Global Blocklist",
+                    description=f"'{keyword}' is already in the global blocklist.",
+                    color=discord.Color.orange(),
+                    timestamp=discord.utils.utcnow()
+                )
+
+            embed.add_field(
+                name="Current Blocklist Count",
+                value=f"{len(gv.global_blocklist.items)} items",
+                inline=False
+            )
+
+            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+
+        except Exception as e:
+            embed = discord.Embed(
+                title="Failed to Add to Global Blocklist",
+                description=f"Error: {str(e)}",
+                color=discord.Color.red(),
+                timestamp=discord.utils.utcnow()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+            logger.error(f"Failed to add '{keyword}' to global blocklist via Discord: {e}")
+
+    @bot.tree.command(
+        name='remove-from-global-blocklist',
+        description="Remove a keyword or phrase from the global blocklist"
+    )
+    @commands.is_owner()
+    async def remove_from_global_blocklist_command(
+        interaction: discord.Interaction,
+        keyword: str,
+        ephemeral: bool = True
+    ):
+        try:
+            success = gv.global_blocklist.remove(keyword)
+
+            if success:
+                embed = discord.Embed(
+                    title="Removed from Global Blocklist",
+                    description=f"Successfully removed '{keyword}' from the global blocklist.",
+                    color=discord.Color.green(),
+                    timestamp=discord.utils.utcnow()
+                )
+                logger.info(f"Removed '{keyword}' from global blocklist via Discord command")
+            else:
+                embed = discord.Embed(
+                    title="Not Found in Global Blocklist",
+                    description=f"'{keyword}' was not found in the global blocklist.",
+                    color=discord.Color.orange(),
+                    timestamp=discord.utils.utcnow()
+                )
+
+            embed.add_field(
+                name="Current Blocklist Count",
+                value=f"{len(gv.global_blocklist.items)} items",
+                inline=False
+            )
+
+            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+
+        except Exception as e:
+            embed = discord.Embed(
+                title="Failed to Remove from Global Blocklist",
+                description=f"Error: {str(e)}",
+                color=discord.Color.red(),
+                timestamp=discord.utils.utcnow()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+            logger.error(f"Failed to remove '{keyword}' from global blocklist via Discord: {e}")
+
     @bot.tree.command(name='estimate-daily-api-calls', description="Estimate the number of eBay API calls made per day based on current config")  # noqa: E501
     @commands.is_owner()
     async def estimate_daily_api_calls_command(interaction: discord.Interaction, ephemeral: bool = False):
@@ -887,7 +1006,7 @@ def setup_commands(bot: EbayScraperBot):
 
             embed.add_field(
                 name="Keyword Blocklist",
-                value="\n".join("- " + item for item in gv.config.global_blocklist)
+                value="\n".join("- " + item for item in gv.global_blocklist.items) if gv.global_blocklist.items else "No blocked keywords"  # noqa: E501
             )
 
             embed.add_field(
