@@ -476,8 +476,18 @@ class EbayScraperBot(commands.Bot):
             inline=False
         )
 
+        embed.add_field(
+            name=f"{Emojis.OBO} Offers Enabled:",
+            value=(
+                f"{Emojis.CHECK} **Yes**"
+                if BuyingOption.BEST_OFFER in item.buying_options
+                else f"{Emojis.EXCLAMATION} No"
+            ),
+            inline=False
+        )
+
         if psus:
-            def get_psu_name(tier: paw.Tier) -> str:
+            def get_tier_name(tier: paw.Tier) -> str:
                 return tier.name.upper().replace("_", "").replace("PLUS", "+").replace("MINUS", "-")
 
             def get_tier_emoji(tier: paw.Tier) -> str:
@@ -500,20 +510,10 @@ class EbayScraperBot(commands.Bot):
             embed.add_field(
                 name=":zap: SPL's PSU Tierlist Matches:",
                 value="*Note: These are potential matches based on the listing details. These may be incorrect, so please verify at https://psutierlist.org.*" + "\n" + "\n".join([  # noqa: E501
-                    f"- {get_tier_emoji(psu.tier)}**{psu.full_name}** (Tier **{get_psu_name(psu.tier)}**)" for psu in psus  # noqa: E501
+                    f"- {psu.full_name} ({get_tier_emoji(psu.tier)}Tier **{get_tier_name(psu.tier)}**)" for psu in psus  # noqa: E501
                 ]),
                 inline=False
             )
-
-        embed.add_field(
-            name=f"{Emojis.OBO} Offers Enabled:",
-            value=(
-                f"{Emojis.CHECK} Yes"
-                if BuyingOption.BEST_OFFER in item.buying_options
-                else f"{Emojis.EXCLAMATION} No"
-            ),
-            inline=False
-        )
 
         if risky:
             if risk_message:

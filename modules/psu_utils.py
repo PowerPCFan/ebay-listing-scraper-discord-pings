@@ -114,7 +114,6 @@ def find_psu_in_tierlist(listing_name: str) -> list[paw.Item] | None:
                     distance = rapidfuzz.distance.DamerauLevenshtein.distance(proper_token, listing_token)
 
                     if distance <= threshold and len(listing_token) >= len(proper_token):
-                        print(f"DEBUG: '{proper_token}' matched '{listing_token}' (distance: {distance})")
                         proper_token_matched = True
                         break
 
