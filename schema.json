@@ -2,6 +2,7 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "Config",
     "type": "object",
+    "additionalProperties": false,
     "properties": {
         "debug_mode": { "type": "boolean" },
         "discord_py_debug_mode": { "type": "boolean" },
@@ -57,6 +58,7 @@
             "type": "array",
             "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                     "category_name": { "type": "string" },
                     "categories": {
@@ -75,10 +77,12 @@
                                 "friendly_name": { "type": ["string", "null"] },
                                 "deal_ranges": {
                                     "type": ["object", "null"],
+                                    "additionalProperties": false,
                                     "properties": {
                                         "do_not_show": { "type": "array", "items": { "type": "string" } },
                                         "fire_deal": {
                                             "type": "object",
+                                            "additionalProperties": false,
                                             "properties": {
                                                 "start": { "type": "integer" },
                                                 "end": { "type": "integer" }
@@ -87,6 +91,7 @@
                                         },
                                         "great_deal": {
                                             "type": "object",
+                                            "additionalProperties": false,
                                             "properties": {
                                                 "start": { "type": "integer" },
                                                 "end": { "type": "integer" }
@@ -95,6 +100,7 @@
                                         },
                                         "good_deal": {
                                             "type": "object",
+                                            "additionalProperties": false,
                                             "properties": {
                                                 "start": { "type": "integer" },
                                                 "end": { "type": "integer" }
@@ -103,16 +109,17 @@
                                         },
                                         "ok_deal": {
                                             "type": "object",
+                                            "additionalProperties": false,
                                             "properties": {
                                                 "start": { "type": "integer" },
                                                 "end": { "type": "integer" }
                                             },
                                             "required": ["start", "end"]
                                         }
-                                    },
-                                    "required": ["fire_deal", "great_deal", "good_deal", "ok_deal"]
+                                    }
                                 }
                             },
+                            "additionalProperties": false,
                             "required": ["keyword"]
                         }
                     },
@@ -126,7 +133,12 @@
                     "blocklist_override": {
                         "type": "array",
                         "items": { "type": "string" }
-                    }
+                    },
+                    "do_not_show": {
+                        "type": "array",
+                        "items": { "type": "string" }
+                    },
+                    "is_psu": { "type": "boolean" }
                 },
                 "required": ["category_name", "categories", "keywords", "channel_id", "role"]
             }
@@ -136,6 +148,7 @@
             "type": "array",
             "items": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                     "title": { "type": "string" },
                     "roles": {
@@ -143,6 +156,7 @@
                         "maxItems": 25,
                         "items": {
                             "type": "object",
+                            "additionalProperties": false,
                             "properties": {
                                 "name": { "type": "string" },
                                 "id": { "type": "integer" }
@@ -158,6 +172,7 @@
     },
     "required": [
         "debug_mode",
+        "discord_py_debug_mode",
         "log_api_responses",
         "file_logging",
         "ping_for_warnings",
@@ -171,6 +186,7 @@
         "ebay_dev_id",
         "discord_bot_token",
         "discord_guild_id",
+        "admin_role_id",
         "seller_blocklist",
         "condition_blocklist",
         "pings"

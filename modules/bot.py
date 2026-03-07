@@ -357,7 +357,7 @@ class EbayScraperBot(commands.Bot):
         ping_config: PingConfig,
         deal: DealTuple,
         match_object: Match,
-        psu: paw.Item | None
+        psu: list[paw.Item] | None
     ) -> None:
         channel_id = ping_config.channel_id
         if not channel_id:
@@ -387,7 +387,7 @@ class EbayScraperBot(commands.Bot):
         deal: DealTuple,
         ping_config: PingConfig,
         match_object: Match,
-        psu: paw.Item | None
+        psu: list[paw.Item] | None
     ) -> tuple[discord.Embed, ListingButtonView]:
         view = ListingButtonView(item, ping_config)
         embed = self.create_listing_embed(item, deal, match_object, psu)
@@ -398,17 +398,15 @@ class EbayScraperBot(commands.Bot):
         item: EbayItem,
         deal: DealTuple,
         match_object: Match,
-        psu: paw.Item | None
+        psus: list[paw.Item] | None
     ) -> discord.Embed:
         shipping = item.shipping[0] if item.shipping else None
         condition = item.condition.name if (item.condition is not None and item.condition.name is not None) else "Unknown"  # noqa: E501
         price = format_price(price=item.price.value, currency=item.price.currency)
         last_updated = create_discord_timestamp(
-            timestamp=math.floor(
-                datetime.fromisoformat(
-                    match_object.last_updated or "1970-01-01T00:00:00+00:00"
-                ).timestamp()
-            ),
+            timestamp=math.floor(datetime.fromisoformat(
+                match_object.last_updated or "1970-01-01T00:00:00+00:00"
+            ).timestamp()),
             suffix="d"
         )
 
@@ -477,6 +475,35 @@ class EbayScraperBot(commands.Bot):
             value=get_listing_type_display(item.buying_options),
             inline=False
         )
+
+        if psus:
+            def get_psu_name(tier: paw.Tier) -> str:
+                return tier.name.upper().replace("_", "").replace("PLUS", "+").replace("MINUS", "-")
+
+            def get_tier_emoji(tier: paw.Tier) -> str:
+                green = ['A_plus', 'A', 'A_minus', 'B_plus', 'B']
+                yellow = ['B_minus', 'C_plus', 'C', 'C_minus']
+                orange = ['D_plus', 'D', 'D_minus', 'E_plus']
+                red = ['E', 'E_minus', 'F_plus', 'F', 'F_minus']
+
+                if tier.name in green:
+                    return "🟢 "
+                elif tier.name in yellow:
+                    return "🟡 "
+                elif tier.name in orange:
+                    return "🟠 "
+                elif tier.name in red:
+                    return "🔴 "
+                else:
+                    return ""
+
+            embed.add_field(
+                name=":zap: SPL's PSU Tierlist Matches:",
+                value="*Note: These are potential matches based on the listing details. These may be incorrect, so please verify at https://psutierlist.org.*" + "\n" + "\n".join([  # noqa: E501
+                    f"- {get_tier_emoji(psu.tier)}**{psu.full_name}** (Tier **{get_psu_name(psu.tier)}**)" for psu in psus  # noqa: E501
+                ]),
+                inline=False
+            )
 
         embed.add_field(
             name=f"{Emojis.OBO} Offers Enabled:",

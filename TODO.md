@@ -10,3 +10,4 @@
 - stop debug logs from going to discord (i thought i did that before lol)
   - fix logging in general its so messy
   - also maybe use the bot instead of a webhook for logging? or will that make the user facing messages take longer to send
+- in the future i want to implement something where a View gets sent to a mod only channel where i can select which PSU it matches since my matches are far from perfect so one listing might match multiple PSUs

@@ -17,6 +17,7 @@ from .seen_items import seen_db
 from .enums import BuyingOption, Match, DealRanges
 from datetime import datetime
 from typing import TYPE_CHECKING
+from .psu_utils import find_psu_in_tierlist
 
 
 if TYPE_CHECKING:
@@ -155,6 +156,11 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
                     deal_ranges=matched.deal_ranges
                 )
 
+                if ping_config.is_psu:
+                    psu_matches = find_psu_in_tierlist(item.title)
+                else:
+                    psu_matches = None
+
                 if matched.deal_ranges and deal in matched.deal_ranges.do_not_show:
                     logger.debug(f"Item rejected: deal type '{deal.name}' is in the keyword-level do_not_show list")
                     continue
@@ -165,20 +171,12 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
 
                 logger.info(f"New matching listing: '{item.title}' - ${item.price.value:.2f} ({deal.name})")
 
-                # welcome to my todo list in the middle of a random file!
-
-                # * add config option to declare if an item group or whatever tf im calling them is for PSUs or not
-                # * if it is, then i need to use psu_utils.find_psu_in_tierlist to get potential matches
-                # and then pass them via psu param to display possible matches in the listing embed
-                # * also in the future i want to implement something where a View gets sent to a mod only channel
-                # where i can select which PSU it matches since my matches are far from perfect so one listing might match multiple PSUs
-
                 await bot.send_listing_notification(
                     item=item,
                     ping_config=ping_config,
                     deal=deal,
                     match_object=matched,
-                    psu=psu
+                    psu=psu_matches
                 )
 
                 seen_db.mark_seen(item.item_id, ping_config.category_name, item.title)
