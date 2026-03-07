@@ -12,7 +12,6 @@ from .enums import (
     BuyingOption,
     ShippingType,
     ShippingOption,
-    Emojis,
     Deal,
     DealTuple,
     DealRanges
@@ -131,8 +130,8 @@ def get_listing_type_display(buying_options: BuyingOptions) -> str:
     if BuyingOption.FIXED_PRICE in buying_options:
         text = "**Buy It Now**"
 
-        if BuyingOption.BEST_OFFER in buying_options:
-            text += f" ({Emojis.OBO} or Best Offer)"
+        # if BuyingOption.BEST_OFFER in buying_options:
+        #     text += f" ({Emojis.OBO} or Best Offer)"
 
         labels.append(text)
 

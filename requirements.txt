@@ -1,3 +1,5 @@
 httpx>=0.28.1
 discord.py>=2.6.4
 json5>=0.12.1
+psutierlist-api-wrapper==1.0.2
+RapidFuzz>=3.14.3

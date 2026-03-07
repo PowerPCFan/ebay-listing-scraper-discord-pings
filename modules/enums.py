@@ -163,9 +163,14 @@ class Emojis:
     SELLER = "<:seller:1453721027103428609>"
     CONDITION = "<:condition:1453722903609610504>"
     LISTING_TYPE = "<:listing_type:1453723643766112388>"
+    NICE = "<:nice:1459728762038911088>"
+    # this one doesnt look too nice so i'm just using the standard emoji for now
     # WARNING = "<:warning:1455577563425673403>"
     WARNING = "⚠️"
-    NICE = "<:nice:1459728762038911088>"
+
+    EXCLAMATION = "<:exclamation_mark:1477510984225525800>"
+    INFO = "<:info:1477510894069092493>"
+    CHECK = "<:check:1477511079625101415>"
 
 
 class DealEmojis:

@@ -3,6 +3,7 @@ import asyncio
 import logging
 import discord
 import time
+import psutierlist_api_wrapper as paw
 from datetime import datetime, timezone, timedelta
 from discord.ext import commands
 from discord import app_commands
@@ -11,7 +12,7 @@ from .logger import logger, discordPyLevelValue
 from .config_tools import PingConfig, reload_config, reload_global_blocklist, SelfRoleGroup, SelfRole
 from .rolepicker_config_tools import RolePickerRole, RolePickerState
 from .ebay_api import EbayItem
-from .enums import ConditionEnum, DealTuple, Emojis, Match
+from .enums import ConditionEnum, DealTuple, Emojis, Match, BuyingOption
 from . import global_vars as gv
 from . import ebay_api
 from . import modes
@@ -355,7 +356,8 @@ class EbayScraperBot(commands.Bot):
         item: EbayItem,
         ping_config: PingConfig,
         deal: DealTuple,
-        match_object: Match
+        match_object: Match,
+        psu: paw.Item | None
     ) -> None:
         channel_id = ping_config.channel_id
         if not channel_id:
@@ -367,7 +369,7 @@ class EbayScraperBot(commands.Bot):
             logger.error(f"Could not find channel with ID {channel_id}")
             return
 
-        embed, view = self.create_listing_embed_with_buttons(item, deal, ping_config, match_object)
+        embed, view = self.create_listing_embed_with_buttons(item, deal, ping_config, match_object, psu)
 
         mention = f"<@&{ping_config.role}>"
 
@@ -384,17 +386,19 @@ class EbayScraperBot(commands.Bot):
         item: EbayItem,
         deal: DealTuple,
         ping_config: PingConfig,
-        match_object: Match
+        match_object: Match,
+        psu: paw.Item | None
     ) -> tuple[discord.Embed, ListingButtonView]:
         view = ListingButtonView(item, ping_config)
-        embed = self.create_listing_embed(item, deal, match_object)
+        embed = self.create_listing_embed(item, deal, match_object, psu)
         return embed, view
 
     def create_listing_embed(
         self,
         item: EbayItem,
         deal: DealTuple,
-        match_object: Match
+        match_object: Match,
+        psu: paw.Item | None
     ) -> discord.Embed:
         shipping = item.shipping[0] if item.shipping else None
         condition = item.condition.name if (item.condition is not None and item.condition.name is not None) else "Unknown"  # noqa: E501
@@ -474,6 +478,16 @@ class EbayScraperBot(commands.Bot):
             inline=False
         )
 
+        embed.add_field(
+            name=f"{Emojis.OBO} Offers Enabled:",
+            value=(
+                f"{Emojis.CHECK} Yes"
+                if BuyingOption.BEST_OFFER in item.buying_options
+                else f"{Emojis.EXCLAMATION} No"
+            ),
+            inline=False
+        )
+
         if risky:
             if risk_message:
                 message = risk_message
@@ -486,8 +500,12 @@ class EbayScraperBot(commands.Bot):
                 inline=False
             )
 
+        # discord's default separator for embed footers seems to be '|' on mobile and '•' on desktop
+        # not sure how to conditionally handle that (you probably can't) so i'm just using '•'
+        sep = " • "
+
         embed.set_footer(
-            text=f"Friendly Name: \"{match_object.friendly_name}\"  •  Item ID: {item.item_id}",
+            text=f"Friendly Name: \"{match_object.friendly_name}\" {sep} Item ID: {item.item_id}",
             icon_url="https://raw.githubusercontent.com/PowerPCFan/ebay-listing-scraper-discord-pings/refs/heads/master/static/img/ebay-favicon.png",  # noqa: E501
         )
 

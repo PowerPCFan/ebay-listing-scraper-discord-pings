@@ -90,6 +90,7 @@ class PingConfig:
     exclude_keywords: list[str] = field(default_factory=list)
     blocklist_override: list[str] = field(default_factory=list)
     do_not_show: list[DealTuple] = field(default_factory=list)
+    is_psu: bool = False
 
 
 @dataclass
