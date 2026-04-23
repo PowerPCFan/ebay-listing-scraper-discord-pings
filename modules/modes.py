@@ -169,9 +169,10 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
                     logger.debug(f"Item rejected: deal type '{deal.name}' is in the category-level do_not_show list")
                     continue
 
-                if item.country != "US":
+                if item.country is not None and item.country != "US":
                     # warning for now so i can get pinged and double check that the item is in fact not from the US
                     logger.warning(f"Item rejected: item country '{item.country}' does not match required 'US'")
+                    seen_db.mark_seen(item.full_item_id, ping_config.category_name, item.title)
                     continue
 
                 logger.info(f"New matching listing: '{item.title}' - ${item.price.value:.2f} ({deal.name})")
