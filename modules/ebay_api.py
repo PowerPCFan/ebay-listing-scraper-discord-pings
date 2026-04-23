@@ -242,6 +242,11 @@ class EbayItem:
         except ValueError:
             return None
 
+    @property
+    def country(self) -> str | None:
+        country_code: str | None = dict(self.data.get("itemLocation", {})).get("country", None)
+        return str(country_code) if country_code else None
+
 
 async def get_valid_token() -> str | None:
     global _token_cache, _token_expires_at
