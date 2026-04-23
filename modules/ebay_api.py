@@ -244,8 +244,13 @@ class EbayItem:
 
     @property
     def country(self) -> str | None:
-        country_code: str | None = dict(self.data.get("itemLocation", {})).get("country", None)
-        return str(country_code) if country_code else None
+        cc = dict(self.data.get("itemLocation", {})).get("country", None)
+        return str(cc) if cc else None
+
+    @property
+    def top_rated(self) -> bool | None:
+        tr = self.data.get("topRatedBuyingExperience", None)
+        return bool(tr) if tr is not None else None
 
 
 async def get_valid_token() -> str | None:

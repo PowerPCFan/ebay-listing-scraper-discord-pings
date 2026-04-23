@@ -416,6 +416,15 @@ class EbayScraperBot(commands.Bot):
             title=item.title
         )
 
+        seller_info: str = (
+            f"- Username: [{item.seller.username}]({get_ebay_seller_url(item.seller.username)})\n"
+            f"- **{item.seller.feedback_score or "Unknown"}** feedback score\n"
+            f"- **{item.seller.feedback_percentage or "0"}%** positive feedback"
+        )
+
+        if item.top_rated:
+            seller_info += f"\n- :star: **{item.seller.username}** is a **Top Rated Seller**!"
+
         embed = discord.Embed(
             color=deal.color,
             title=item.title,
@@ -456,11 +465,7 @@ class EbayScraperBot(commands.Bot):
 
         embed.add_field(
             name=f"{Emojis.SELLER} Seller:",
-            value=(
-                f"- Username: [{item.seller.username}]({get_ebay_seller_url(item.seller.username)})\n"
-                f"- **{item.seller.feedback_score or "Unknown"}** feedback score\n"
-                f"- **{item.seller.feedback_percentage or "0"}%** positive feedback"
-            ),
+            value=seller_info,
             inline=False,
         )
 
