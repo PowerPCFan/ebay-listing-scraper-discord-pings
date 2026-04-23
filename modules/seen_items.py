@@ -11,8 +11,8 @@ db_path.parent.mkdir(parents=True, exist_ok=True)
 class SeenItemsDB:
     def __init__(self, db_path=db_path) -> None:
         self.db_path = db_path
-        self.item_queue: list[tuple[int, int, str | None, str]] = []
-        self.temp_seen: set[int] = set()
+        self.item_queue: list[tuple[str, int, str | None, str]] = []
+        self.temp_seen: set[str] = set()
         self.init_db()
 
     def init_db(self) -> None:
@@ -20,7 +20,7 @@ class SeenItemsDB:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS seen_items (
-                        item_id        INTEGER  PRIMARY KEY,
+                        item_id        TEXT     PRIMARY KEY,
                         timestamp      INTEGER  NOT NULL,
                         category_name  TEXT,
                         title          TEXT
@@ -32,7 +32,7 @@ class SeenItemsDB:
             logger.exception("Failed to initialize database:")
             raise
 
-    def is_seen(self, item_id: int) -> bool:
+    def is_seen(self, item_id: str) -> bool:
         if item_id in self.temp_seen:
             return True
 
@@ -51,7 +51,7 @@ class SeenItemsDB:
 
     def mark_seen(
         self,
-        item_id: int,
+        item_id: str,
         category_name: str | None = None,
         title: str = "",
     ) -> None:

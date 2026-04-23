@@ -141,7 +141,7 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
         for item_data in items_list:
             item = ebay_api.EbayItem(item_data)
 
-            if seen_db.is_seen(item.item_id):
+            if seen_db.is_seen(item.full_item_id):
                 continue
 
             matched = matches_ping_criteria(item, ping_config)
@@ -184,11 +184,11 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
                     psu=psu_matches
                 )
 
-                seen_db.mark_seen(item.item_id, ping_config.category_name, item.title)
+                seen_db.mark_seen(item.full_item_id, ping_config.category_name, item.title)
                 new_matches += 1
                 await asyncio.sleep(1)
             else:
-                seen_db.mark_seen(item.item_id, ping_config.category_name, item.title)
+                seen_db.mark_seen(item.full_item_id, ping_config.category_name, item.title)
 
         if new_matches > 0:
             logger.info(
