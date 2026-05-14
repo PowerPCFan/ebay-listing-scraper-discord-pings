@@ -128,6 +128,19 @@ p {
   padding: 12px;
 }
 
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.header-main {
+  display: grid;
+  gap: 4px;
+}
+
 .app-header,
 .topbar,
 .card-head,
@@ -457,6 +470,7 @@ textarea.invalid {
 .card.small {
   display: grid;
   gap: 8px;
+  padding: 12px;
 }
 
 .save-note {
@@ -851,6 +865,10 @@ button.loading {
   display: flex;
   gap: 12px;
   align-items: center;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
 }
 
 .blocklist-row input {
@@ -861,6 +879,44 @@ button.loading {
 .blocklist-row .danger {
   padding: 8px 16px;
   min-width: 44px;
+}
+
+.blocklist-mode-select {
+  width: 130px;
+  min-width: 130px;
+}
+
+.blocklist-mode-select .select-trigger {
+  width: 130px;
+}
+
+.role-row > select {
+  flex: 2 1 280px;
+}
+
+.role-row > input[type="text"] {
+  flex: 1 1 180px;
+  min-width: 120px;
+}
+
+.role-picker-help {
+  margin-bottom: 6px;
+}
+
+.role-cell {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 180px;
+  min-width: 150px;
+}
+
+.role-link-cell {
+  flex: 2 1 320px;
+}
+
+.role-cell-label {
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 /* Tooltip styles */
@@ -983,6 +1039,30 @@ button.loading {
   background-color: var(--surface);
 }
 
+.save-dock.is-collapsible {
+  opacity: 0;
+  transform: translateY(14px);
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 220ms ease, transform 220ms ease, max-height 220ms ease, padding-top 220ms ease, border-width 220ms ease, margin 220ms ease;
+  padding-top: 0;
+  border-width: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.save-dock.is-collapsible.visible {
+  opacity: 1;
+  transform: translateY(0);
+  max-height: 220px;
+  pointer-events: auto;
+  padding-top: 1rem;
+  border-width: 2px;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
 /* Ping-specific save dock animation: hidden until there are pending changes */
 .ping-save-dock {
   opacity: 0;
@@ -1010,4 +1090,12 @@ button.loading {
 
 .button-row.no-justify {
   justify-content: flex-start;
+}
+
+.panel .card-head {
+  margin-bottom: 10px;
+}
+
+#keywordCards .card.small .grid {
+  row-gap: 12px;
 }

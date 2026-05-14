@@ -1,5 +1,3 @@
-# ruff: noqa: E501, C901, ANN401, TRY003, EM101, EM102, TRY301, PLR0915, PLR0912
-
 import asyncio
 import contextlib
 import hashlib
@@ -33,7 +31,7 @@ CONFIG_EDITOR_INDEX = STATIC_DIR / "config-editor" / "index.html"
 EDITOR_METADATA_PATH = Path(__file__).parent.parent / "config-editor-metadata.json"
 
 
-def _reconcile_editor_metadata(metadata: Any, parsed: dict[str, Any]) -> dict[str, Any]:
+def _reconcile_editor_metadata(metadata: dict[str, Any], parsed: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
     if not isinstance(metadata, dict):
         metadata = {}
 
@@ -51,14 +49,23 @@ def _reconcile_editor_metadata(metadata: Any, parsed: dict[str, Any]) -> dict[st
         if not isinstance(ping_keywords, list):
             ping_keywords = []
 
-        existing_ping_meta = existing_pings[ping_idx] if ping_idx < len(existing_pings) and isinstance(existing_pings[ping_idx], dict) else {}
+        existing_ping_meta = (
+            existing_pings[ping_idx]
+            if ping_idx < len(existing_pings) and isinstance(existing_pings[ping_idx], dict)
+            else {}
+        )
         existing_keywords_meta = existing_ping_meta.get("keywords")
         if not isinstance(existing_keywords_meta, list):
             existing_keywords_meta = []
 
         keywords_meta: list[dict[str, Any]] = []
         for kw_idx, _ in enumerate(ping_keywords):
-            existing_kw_meta = existing_keywords_meta[kw_idx] if kw_idx < len(existing_keywords_meta) and isinstance(existing_keywords_meta[kw_idx], dict) else {}
+            existing_kw_meta = (
+                existing_keywords_meta[kw_idx]
+                if kw_idx < len(existing_keywords_meta)
+                and isinstance(existing_keywords_meta[kw_idx], dict)
+                else {}
+            )
             mode = existing_kw_meta.get("mode")
             if mode not in ("manual", "typed"):
                 mode = "manual"
@@ -69,11 +76,13 @@ def _reconcile_editor_metadata(metadata: Any, parsed: dict[str, Any]) -> dict[st
             if not isinstance(component_data, dict):
                 component_data = {}
 
-            keywords_meta.append({
-                "mode": mode,
-                "component_type": component_type,
-                "component_data": component_data,
-            })
+            keywords_meta.append(
+                {
+                    "mode": mode,
+                    "component_type": component_type,
+                    "component_data": component_data,
+                },
+            )
 
         reconciled_pings.append({"keywords": keywords_meta})
 
@@ -97,7 +106,9 @@ def _load_editor_metadata(parsed: dict[str, Any]) -> dict[str, Any]:
 
 def _save_editor_metadata(metadata: dict[str, Any], parsed: dict[str, Any]) -> dict[str, Any]:
     reconciled = _reconcile_editor_metadata(metadata, parsed)
-    EDITOR_METADATA_PATH.write_text(json.dumps(reconciled, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    EDITOR_METADATA_PATH.write_text(
+        json.dumps(reconciled, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
+    )
     return reconciled
 
 
@@ -139,7 +150,8 @@ def _apply_candidate_raw(candidate_raw: str, reason: str = "save") -> dict[str, 
 
 def _apply_candidate_parsed(candidate_data: dict[str, Any]) -> str:
     if not isinstance(candidate_data, dict):
-        raise TypeError("Parsed config payload must be an object.")
+        msg = "Parsed config payload must be an object."
+        raise TypeError(msg)
 
     serialized = json.dumps(candidate_data, indent=4, ensure_ascii=False)
     _apply_candidate_raw(serialized)
@@ -190,12 +202,16 @@ def _list_backups() -> list[dict[str, Any]]:
             continue
 
         stat = file_path.stat()
-        backups.append({
-            "name": file_path.name,
-            "kind": "global_blocklist" if file_path.name.startswith("global_blocklist-") else "config",
-            "size": stat.st_size,
-            "modified": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat() + "Z",
-        })
+        backups.append(
+            {
+                "name": file_path.name,
+                "kind": "global_blocklist"
+                if file_path.name.startswith("global_blocklist-")
+                else "config",
+                "size": stat.st_size,
+                "modified": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat() + "Z",
+            },
+        )
 
     backups.sort(key=lambda item: item["modified"], reverse=True)
     return backups
@@ -203,13 +219,16 @@ def _list_backups() -> list[dict[str, Any]]:
 
 def _resolve_backup_path(filename: str) -> Path:
     if Path(filename).name != filename:
-        raise ValueError("Invalid backup filename.")
+        msg = "Invalid backup filename."
+        raise ValueError(msg)
 
     backup_path = (BACKUP_DIR / filename).resolve()
     if backup_path.parent != BACKUP_DIR.resolve():
-        raise ValueError("Backup path is outside the backup directory.")
+        msg_0 = "Backup path is outside the backup directory."
+        raise ValueError(msg_0)
     if not backup_path.exists() or not backup_path.is_file():
-        raise FileNotFoundError(f"Backup not found: {filename}")
+        msg_1 = f"Backup not found: {filename}"
+        raise FileNotFoundError(msg_1)
 
     return backup_path
 
@@ -243,9 +262,11 @@ def _delete_backup(filename: str) -> bool:
         backup_path.unlink()
         return True
     except FileNotFoundError as e:
-        raise FileNotFoundError(f"Backup not found: {filename}") from e
+        msg = f"Backup not found: {filename}"
+        raise FileNotFoundError(msg) from e
     except PermissionError as e:
-        raise PermissionError(f"Permission denied to delete: {filename}") from e
+        msg_0 = f"Permission denied to delete: {filename}"
+        raise PermissionError(msg_0) from e
 
 
 def _create_manual_backup(reason: str = "manual") -> Path:
@@ -334,7 +355,7 @@ async def handle_index(request: web.Request) -> web.Response | web.FileResponse:
 async def handle_login(request: web.Request) -> web.Response:
     password = _get_config_editor_password()
     if not password:
-        raise web.HTTPFound("/")
+        raise web.HTTPFound(location="/")
 
     data = await request.post()
     submitted = str(data.get("password", "")).strip()
@@ -451,7 +472,7 @@ async def _safe_ws_send_json(ws: web.WebSocketResponse, payload: dict[str, Any])
         raise
 
 
-async def ws_handler(request: web.Request) -> web.WebSocketResponse:
+async def ws_handler(request: web.Request) -> web.WebSocketResponse:  # noqa: C901, PLR0912, PLR0915
     if not _is_editor_authenticated(request):
         raise web.HTTPUnauthorized(text="Config editor authentication required.")
 
@@ -474,27 +495,36 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                 elif action == "validate_raw":
                     raw = payload.get("raw", "")
                     json5.loads(raw)
-                    if not await _safe_ws_send_json(ws, {"type": "validated", "message": "JSONC is valid."}):
+                    if not await _safe_ws_send_json(
+                        ws, {"type": "validated", "message": "JSONC is valid."},
+                    ):
                         break
 
                 elif action == "save_raw":
                     raw = payload.get("raw", "")
                     parsed = _apply_candidate_raw(raw)
-                    if not await _safe_ws_send_json(ws, {
-                        "type": "saved",
-                        "message": "Saved raw JSONC and reloaded runtime config.",
-                        "raw": raw,
-                        "parsed": parsed,
-                    }):
+                    if not await _safe_ws_send_json(
+                        ws,
+                        {
+                            "type": "saved",
+                            "message": "Saved raw JSONC and reloaded runtime config.",
+                            "raw": raw,
+                            "parsed": parsed,
+                        },
+                    ):
                         break
 
                 elif action == "save_parsed":
                     parsed_payload = payload.get("parsed")
                     if not isinstance(parsed_payload, dict):
-                        raise ValueError("Expected parsed payload to be an object.")
+                        msg_0 = "Expected parsed payload to be an object."
+                        raise ValueError(msg_0)  # noqa: TRY301
                     editor_metadata_payload = payload.get("editor_metadata")
-                    if editor_metadata_payload is not None and not isinstance(editor_metadata_payload, dict):
-                        raise ValueError("Expected editor_metadata to be an object when provided.")
+                    if editor_metadata_payload is not None and not isinstance(
+                        editor_metadata_payload, dict,
+                    ):
+                        msg_1 = "Expected editor_metadata to be an object when provided."
+                        raise ValueError(msg_1)  # noqa: TRY301
 
                     raw = _apply_candidate_parsed(parsed_payload)
                     parsed = get_parsed_config()
@@ -502,49 +532,63 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                     if isinstance(editor_metadata_payload, dict):
                         current_editor_metadata = editor_metadata_payload
                     saved_editor_metadata = _save_editor_metadata(current_editor_metadata, parsed)
-                    if not await _safe_ws_send_json(ws, {
-                        "type": "saved",
-                        "message": "Saved structured config and reloaded runtime config.",
-                        "raw": raw,
-                        "parsed": parsed,
-                        "editor_metadata": saved_editor_metadata,
-                    }):
+                    if not await _safe_ws_send_json(
+                        ws,
+                        {
+                            "type": "saved",
+                            "message": "Saved structured config and reloaded runtime config.",
+                            "raw": raw,
+                            "parsed": parsed,
+                            "editor_metadata": saved_editor_metadata,
+                        },
+                    ):
                         break
 
                 elif action == "export_json":
                     export_content = _build_export_json()
-                    if not await _safe_ws_send_json(ws, {
-                        "type": "export_json",
-                        "filename": "config.json",
-                        "content": export_content,
-                    }):
+                    if not await _safe_ws_send_json(
+                        ws,
+                        {
+                            "type": "export_json",
+                            "filename": "config.json",
+                            "content": export_content,
+                        },
+                    ):
                         break
 
                 elif action == "save_global_blocklist":
                     items = payload.get("items", [])
                     if not isinstance(items, list):
-                        raise ValueError("Expected items to be a list of strings.")
+                        msg_2 = "Expected items to be a list of strings."
+                        raise ValueError(msg_2)  # noqa: TRY301
 
                     saved_items = _save_global_blocklist([str(item) for item in items])
-                    if not await _safe_ws_send_json(ws, {
-                        "type": "saved_blocklist",
-                        "message": "Saved global blocklist and reloaded runtime blocklist.",
-                        "items": saved_items,
-                        "backups": _list_backups(),
-                    }):
+                    if not await _safe_ws_send_json(
+                        ws,
+                        {
+                            "type": "saved_blocklist",
+                            "message": "Saved global blocklist and reloaded runtime blocklist.",
+                            "items": saved_items,
+                            "backups": _list_backups(),
+                        },
+                    ):
                         break
 
                 elif action == "get_backups":
-                    if not await _safe_ws_send_json(ws, {
-                        "type": "backups",
-                        "items": _list_backups(),
-                    }):
+                    if not await _safe_ws_send_json(
+                        ws,
+                        {
+                            "type": "backups",
+                            "items": _list_backups(),
+                        },
+                    ):
                         break
 
                 elif action == "restore_backup":
                     filename = payload.get("filename")
                     if not isinstance(filename, str) or not filename.strip():
-                        raise ValueError("Expected a backup filename.")
+                        msg_3 = "Expected a backup filename."
+                        raise ValueError(msg_3)  # noqa: TRY301
 
                     restored = _restore_backup(filename)
                     state_payload = _ws_state_payload()
@@ -556,14 +600,18 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                 elif action == "delete_backup":
                     filename = payload.get("filename")
                     if not isinstance(filename, str) or not filename.strip():
-                        raise ValueError("Expected a backup filename.")
+                        msg_4 = "Expected a backup filename."
+                        raise ValueError(msg_4)  # noqa: TRY301
 
                     deleted = _delete_backup(filename)
-                    if deleted and not await _safe_ws_send_json(ws, {
-                        "type": "backup_deleted",
-                        "message": f"Deleted backup: {filename}",
-                        "backups": _list_backups(),
-                    }):
+                    if deleted and not await _safe_ws_send_json(
+                        ws,
+                        {
+                            "type": "backup_deleted",
+                            "message": f"Deleted backup: {filename}",
+                            "backups": _list_backups(),
+                        },
+                    ):
                         break
                     break
 
@@ -571,17 +619,23 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                     reason = payload.get("reason", "manual")
                     try:
                         backup_path = _create_manual_backup(reason)
-                        if not await _safe_ws_send_json(ws, {
-                            "type": "backup_created",
-                            "message": f"Created manual backup: {backup_path.name}",
-                            "backups": _list_backups(),
-                        }):
+                        if not await _safe_ws_send_json(
+                            ws,
+                            {
+                                "type": "backup_created",
+                                "message": f"Created manual backup: {backup_path.name}",
+                                "backups": _list_backups(),
+                            },
+                        ):
                             break
                     except Exception as e:
-                        if not await _safe_ws_send_json(ws, {
-                            "type": "error",
-                            "message": f"Failed to create backup: {e}",
-                        }):
+                        if not await _safe_ws_send_json(
+                            ws,
+                            {
+                                "type": "error",
+                                "message": f"Failed to create backup: {e}",
+                            },
+                        ):
                             break
                     break
 
@@ -591,10 +645,13 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                         break
 
                 else:
-                    raise ValueError(f"Unknown action: {action}")
+                    msg_5 = f"Unknown action: {action}"
+                    raise ValueError(msg_5)  # noqa: TRY301
 
             except Exception as exc:
-                if not await _safe_ws_send_json(ws, {"type": "error", "message": f"{type(exc).__name__}: {exc}"}):
+                if not await _safe_ws_send_json(
+                    ws, {"type": "error", "message": f"{type(exc).__name__}: {exc}"},
+                ):
                     break
 
         elif msg.type == WSMsgType.ERROR:

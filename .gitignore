@@ -18,3 +18,4 @@ global_blocklist.txt
 config-backups/
 config-editor-metadata.json
 .codex
+agents/

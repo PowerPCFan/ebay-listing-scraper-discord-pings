@@ -57,6 +57,14 @@
   const btnSaveRoles = document.getElementById("btnSaveRoles");
   const btnDiscardRoles = document.getElementById("btnDiscardRoles");
   const btnAddRoleGroup = document.getElementById("btnAddRoleGroup");
+  const blocklistAddOverlayEl = document.getElementById("blocklistAddOverlay");
+  const blocklistAddModeEl = document.getElementById("blocklistAddMode");
+  const blocklistAddModeCustomEl = document.getElementById("blocklistAddModeCustom");
+  const blocklistAddValueEl = document.getElementById("blocklistAddValue");
+  const blocklistAddHintEl = document.getElementById("blocklistAddHint");
+  const btnBlocklistAddCancelEl = document.getElementById("btnBlocklistAddCancel");
+  const btnBlocklistAddApplyEl = document.getElementById("btnBlocklistAddApply");
+  let blocklistAddModeDropdown = null;
 
   let confirmResolver = null;
 
@@ -182,6 +190,136 @@
     btnSaveBlocklist.disabled = !hasChanges;
     btnSaveBlocklist.textContent = hasChanges ? "Save Blocklist Changes" : "All Changes Saved";
     btnDiscardBlocklist.style.display = hasChanges ? "inline-flex" : "none";
+    toggleSaveDockVisibility(btnSaveBlocklist, hasChanges);
+  }
+
+  function isRegexBlocklistEntry(value) {
+    return String(value || "").toLowerCase().startsWith("regexp::");
+  }
+
+  function stripRegexPrefix(value) {
+    return String(value || "").replace(/^regexp::/i, "");
+  }
+
+  function updateBlocklistAddHint() {
+    if (!blocklistAddHintEl || !blocklistAddModeEl) return;
+    blocklistAddHintEl.textContent = blocklistAddModeEl.value === "regex"
+      ? "Saved as a regex pattern."
+      : "Saved as plaintext.";
+  }
+
+  function syncBlocklistDialogModeFromValue() {
+    if (!blocklistAddModeEl || !blocklistAddValueEl) return;
+    const raw = blocklistAddValueEl.value.trim();
+    const shouldBeRegex = isRegexBlocklistEntry(raw);
+    const shouldBePlain = raw !== "" && !shouldBeRegex;
+    if (shouldBeRegex && blocklistAddModeEl.value !== "regex") {
+      blocklistAddModeEl.value = "regex";
+      blocklistAddValueEl.value = stripRegexPrefix(raw);
+      updateBlocklistAddHint();
+    } else if (shouldBePlain && blocklistAddModeEl.value !== "plain") {
+      blocklistAddModeEl.value = "plain";
+      updateBlocklistAddHint();
+    }
+  }
+
+  function applyBlocklistDialogModeToggle() {
+    if (!blocklistAddModeEl || !blocklistAddValueEl) return;
+    blocklistAddValueEl.value = stripRegexPrefix(blocklistAddValueEl.value).trim();
+    updateBlocklistAddHint();
+  }
+
+  function createSingleSelect(selectedValue, options, onChange) {
+    const container = document.createElement("div");
+    container.className = "custom-select";
+
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "select-trigger";
+
+    const menu = document.createElement("div");
+    menu.className = "select-menu";
+
+    const normalize = (value) => String(value ?? "");
+    let currentValue = normalize(selectedValue);
+
+    const getLabel = (value) => {
+      const found = options.find((opt) => normalize(opt.value) === normalize(value));
+      return found ? found.label : (options[0]?.label ?? "");
+    };
+
+    const syncTrigger = () => {
+      trigger.textContent = getLabel(currentValue);
+    };
+
+    options.forEach((opt) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "tonal";
+      item.style.width = "100%";
+      item.style.textAlign = "left";
+      item.textContent = opt.label;
+      item.addEventListener("click", (e) => {
+        e.stopPropagation();
+        currentValue = normalize(opt.value);
+        syncTrigger();
+        menu.classList.remove("open");
+        onChange(currentValue);
+      });
+      menu.appendChild(item);
+    });
+
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      document.querySelectorAll(".select-menu").forEach((m) => {
+        if (m !== menu) m.classList.remove("open");
+      });
+      menu.classList.toggle("open");
+    });
+
+    syncTrigger();
+    container.appendChild(trigger);
+    container.appendChild(menu);
+    return { container, setValue: (v) => { currentValue = normalize(v); syncTrigger(); } };
+  }
+
+  function openBlocklistAddDialog() {
+    if (!blocklistAddOverlayEl || !blocklistAddModeEl || !blocklistAddValueEl) return;
+    blocklistAddModeEl.value = "plain";
+    if (blocklistAddModeDropdown) {
+      blocklistAddModeDropdown.setValue("plain");
+    }
+    blocklistAddValueEl.value = "";
+    updateBlocklistAddHint();
+    blocklistAddOverlayEl.classList.add("open");
+    blocklistAddOverlayEl.setAttribute("aria-hidden", "false");
+    setTimeout(() => blocklistAddValueEl.focus(), 0);
+  }
+
+  function closeBlocklistAddDialog() {
+    if (!blocklistAddOverlayEl) return;
+    blocklistAddOverlayEl.classList.remove("open");
+    blocklistAddOverlayEl.setAttribute("aria-hidden", "true");
+  }
+
+  function addBlocklistFromDialog() {
+    if (!blocklistAddModeEl || !blocklistAddValueEl) return;
+    const raw = blocklistAddValueEl.value.trim();
+    if (!raw) {
+      setStatus("Please enter a blocklist keyword.", "error");
+      return;
+    }
+
+    const normalizedCore = stripRegexPrefix(raw).trim();
+    const finalValue = blocklistAddModeEl.value === "regex"
+      ? `regexp::${normalizedCore}`
+      : normalizedCore;
+
+    state.blocklist.push(finalValue);
+    renderBlocklist();
+    updateBlocklistSaveState();
+    closeBlocklistAddDialog();
+    setStatus("Blocklist keyword added.", "ok");
   }
 
   function updateRolesSaveState() {
@@ -189,6 +327,7 @@
     btnSaveRoles.disabled = !hasChanges;
     btnSaveRoles.textContent = hasChanges ? "Save Role Picker Changes" : "All Changes Saved";
     btnDiscardRoles.style.display = hasChanges ? "inline-flex" : "none";
+    toggleSaveDockVisibility(btnSaveRoles, hasChanges);
   }
 
   function updateSettingsSaveState() {
@@ -201,6 +340,16 @@
     btnSaveSettings.disabled = !hasChanges;
     btnSaveSettings.textContent = hasChanges ? "Save Settings" : "All Changes Saved";
     btnDiscardSettings.style.display = hasChanges ? "inline-flex" : "none";
+    toggleSaveDockVisibility(btnSaveSettings, hasChanges);
+  }
+
+  function toggleSaveDockVisibility(primaryButtonEl, show) {
+    if (!primaryButtonEl) return;
+    const dock = primaryButtonEl.closest(".save-dock");
+    if (!dock) return;
+    dock.classList.add("is-collapsible");
+    dock.classList.toggle("visible", !!show);
+    dock.setAttribute("aria-hidden", show ? "false" : "true");
   }
 
   async function discardChanges() {
@@ -1342,13 +1491,34 @@
     state.blocklist.forEach((word, index) => {
       const row = document.createElement("div");
       row.className = "blocklist-row";
+      let modeValue = isRegexBlocklistEntry(word) ? "regex" : "plain";
+      const modeDropdown = createSingleSelect(
+        modeValue,
+        [
+          { value: "plain", label: "Plaintext" },
+          { value: "regex", label: "Regex" },
+        ],
+        (newValue) => {
+          modeValue = newValue;
+          const sanitizedCore = sanitizeBlocklistItem(stripRegexPrefix(input.value));
+          input.value = sanitizedCore;
+          state.blocklist[index] = modeValue === "regex"
+            ? `regexp::${sanitizedCore}`
+            : sanitizedCore;
+          updateBlocklistSaveState();
+          updateBlocklistDiff();
+        }
+      );
+      modeDropdown.container.classList.add("blocklist-mode-select");
       
       const input = document.createElement("input");
       input.type = "text";
-      input.value = word;
+      input.value = stripRegexPrefix(word);
       input.addEventListener("input", (e) => {
-        const sanitized = sanitizeBlocklistItem(e.target.value);
-        state.blocklist[index] = sanitized;
+        const sanitizedCore = sanitizeBlocklistItem(stripRegexPrefix(e.target.value));
+        state.blocklist[index] = modeValue === "regex"
+          ? `regexp::${sanitizedCore}`
+          : sanitizedCore;
         updateBlocklistSaveState();
         updateBlocklistDiff();
       });
@@ -1362,6 +1532,7 @@
         updateBlocklistSaveState();
       });
       
+      row.appendChild(modeDropdown.container);
       row.appendChild(input);
       row.appendChild(remove);
       blocklistContainer.appendChild(row);
@@ -1482,10 +1653,19 @@
     const settingsFields = [
       { key: "discord_guild_id", label: "Primary Discord Server (Guild) ID", type: "text" },
       { key: "admin_role_id", label: "Admin Role ID", type: "text" },
+      { key: "logger_webhook_ping", label: "Logger Webhook Ping Role/User ID", type: "text" },
       { key: "poll_interval_seconds", label: "Poll Interval (Seconds)", type: "number" },
+      { key: "start_on_command", label: "Start on Command", type: "checkbox" },
+      { key: "bot_debug_commands", label: "Enable Bot Debug Commands", type: "checkbox" },
+      { key: "debug_mode", label: "Debug Mode", type: "checkbox" },
+      { key: "discord_py_debug_mode", label: "Discord.py Debug Mode", type: "checkbox" },
+      { key: "log_api_responses", label: "Log API Responses", type: "checkbox" },
       { key: "ping_for_warnings", label: "Ping for Scraper Warnings", type: "checkbox" },
       { key: "include_shipping_in_deal_evaluation", label: "Include Shipping in Deal Tiers", type: "checkbox" },
+      { key: "include_shipping_in_price_filters", label: "Include Shipping in Price Filters", type: "checkbox" },
       { key: "file_logging", label: "Enable File Logging", type: "checkbox" },
+      { key: "config_editor_host", label: "Config Editor Host", type: "text" },
+      { key: "config_editor_port", label: "Config Editor Port", type: "number" },
     ];
 
     const grid = document.createElement("div");
@@ -1543,6 +1723,77 @@
       }
       grid.appendChild(wrapper);
     });
+
+    const sleepStart = state.sleep_hours?.start ?? "";
+    const sleepEnd = state.sleep_hours?.end ?? "";
+    const sleepStartWrap = document.createElement("div");
+    sleepStartWrap.className = "field half";
+    const sleepStartLabel = document.createElement("label");
+    sleepStartLabel.textContent = "Sleep Hours Start (HH:MM)";
+    const sleepStartInput = document.createElement("input");
+    sleepStartInput.type = "text";
+    sleepStartInput.placeholder = "23:00";
+    sleepStartInput.value = sleepStart;
+    sleepStartInput.addEventListener("input", () => {
+      if (!state.sleep_hours || typeof state.sleep_hours !== "object") {
+        state.sleep_hours = { start: "", end: "" };
+      }
+      state.sleep_hours.start = sleepStartInput.value;
+      updateSettingsSaveState();
+    });
+    sleepStartWrap.appendChild(sleepStartLabel);
+    sleepStartWrap.appendChild(sleepStartInput);
+    grid.appendChild(sleepStartWrap);
+
+    const sleepEndWrap = document.createElement("div");
+    sleepEndWrap.className = "field half";
+    const sleepEndLabel = document.createElement("label");
+    sleepEndLabel.textContent = "Sleep Hours End (HH:MM)";
+    const sleepEndInput = document.createElement("input");
+    sleepEndInput.type = "text";
+    sleepEndInput.placeholder = "07:00";
+    sleepEndInput.value = sleepEnd;
+    sleepEndInput.addEventListener("input", () => {
+      if (!state.sleep_hours || typeof state.sleep_hours !== "object") {
+        state.sleep_hours = { start: "", end: "" };
+      }
+      state.sleep_hours.end = sleepEndInput.value;
+      updateSettingsSaveState();
+    });
+    sleepEndWrap.appendChild(sleepEndLabel);
+    sleepEndWrap.appendChild(sleepEndInput);
+    grid.appendChild(sleepEndWrap);
+
+    const arraySettings = [
+      ["seller_blocklist", "Seller Blocklist", false],
+      ["condition_blocklist", "Condition Blocklist", true],
+    ];
+    arraySettings.forEach(([key, labelText, isNumeric]) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "field full";
+      const label = document.createElement("label");
+      label.textContent = labelText;
+      const trigger = document.createElement("div");
+      trigger.className = "array-trigger";
+      const values = Array.isArray(state[key]) ? state[key] : [];
+      if (!Array.isArray(state[key])) state[key] = [];
+      values.forEach((v) => {
+        const chip = document.createElement("span");
+        chip.className = "array-chip";
+        chip.textContent = String(v);
+        trigger.appendChild(chip);
+      });
+      trigger.addEventListener("click", () => {
+        openArrayEditor(labelText, state[key] || [], !!isNumeric, (newList) => {
+          state[key] = newList;
+          renderSettings();
+          updateSettingsSaveState();
+        });
+      });
+      wrapper.appendChild(label);
+      wrapper.appendChild(trigger);
+      grid.appendChild(wrapper);
+    });
     
     settingsContainer.appendChild(grid);
   }
@@ -1550,6 +1801,20 @@
   function renderRoleGroups() {
     if (!roleGroupsContainer) return;
     roleGroupsContainer.innerHTML = "";
+
+    const getDiscordRoleNameById = (roleId) => {
+      const target = String(roleId || "").trim();
+      if (!target || !discordMetadata || !Array.isArray(discordMetadata.guilds)) return "";
+      for (const guild of discordMetadata.guilds) {
+        const roles = Array.isArray(guild.roles) ? guild.roles : [];
+        const found = roles.find((r) => String(r.id) === target);
+        if (found && found.name) {
+          return String(found.name);
+        }
+      }
+      return "";
+    };
+
     state.self_roles.forEach((group, gIndex) => {
       const card = document.createElement("div");
       card.className = "surface nested card";
@@ -1605,50 +1870,100 @@
       rolesList.style.padding = "0";
            if (Array.isArray(group.roles)) {
         group.roles.forEach((role, rIndex) => {
+          const normalizedRole = (role && typeof role === "object") ? role : {};
+          let resolvedName = normalizedRole.name ?? normalizedRole.display_name ?? "";
+          let resolvedId = normalizedRole.id ?? normalizedRole.role_id ?? normalizedRole.roleId ?? "";
+
+          const linkedByRole = state.pings.find((p) => String(p.role) === String(resolvedId));
+          if (linkedByRole) {
+            if (!String(resolvedName || "").trim()) {
+              resolvedName = linkedByRole.category_name || "";
+            }
+            if (!String(resolvedId || "").trim()) {
+              resolvedId = linkedByRole.role || "";
+            }
+          }
+
+          if (!String(resolvedName || "").trim() && normalizedRole.linked_ping_index != null) {
+            const linkedPing = state.pings[Number(normalizedRole.linked_ping_index)];
+            if (linkedPing) {
+              resolvedName = linkedPing.category_name || resolvedName;
+              resolvedId = linkedPing.role || resolvedId;
+            }
+          }
+
+          group.roles[rIndex] = { name: String(resolvedName || ""), id: String(resolvedId || "") };
+          const currentRole = group.roles[rIndex];
+
           const row = document.createElement("div");
-          row.className = "blocklist-row";
+          row.className = "blocklist-row role-row";
+
+          const linkField = document.createElement("div");
+          linkField.className = "role-cell role-link-cell";
+          const linkLabel = document.createElement("label");
+          linkLabel.textContent = "Linked Category (ping that this entry is linked to)";
+          linkLabel.className = "role-cell-label";
           
           const pingSelect = document.createElement("select");
           const defaultOpt = document.createElement("option");
           defaultOpt.value = "";
           defaultOpt.textContent = "Link to Ping...";
           pingSelect.appendChild(defaultOpt);
+          let selectedPingIndexByName = -1;
+          let selectedPingIndexById = -1;
           
           state.pings.forEach((p, pIdx) => {
             const opt = document.createElement("option");
             opt.value = pIdx;
-            opt.textContent = p.category_name || `Ping ${pIdx+1}`;
-            // If the role ID matches a ping role, select it
-            if (String(p.role) === String(role.id)) {
-              opt.selected = true;
+            const roleName = getDiscordRoleNameById(p.role);
+            const pingName = p.category_name || `Ping ${pIdx + 1}`;
+            opt.textContent = roleName
+              ? `${pingName} (@${roleName} • ${String(p.role || "")})`
+              : pingName;
+            if (selectedPingIndexByName === -1 && String(pingName) === String(currentRole.name || "")) {
+              selectedPingIndexByName = pIdx;
+            }
+            if (selectedPingIndexById === -1 && String(p.role) === String(currentRole.id)) {
+              selectedPingIndexById = pIdx;
             }
             pingSelect.appendChild(opt);
           });
+
+          if (selectedPingIndexByName >= 0) {
+            pingSelect.value = String(selectedPingIndexByName);
+          } else if (selectedPingIndexById >= 0) {
+            pingSelect.value = String(selectedPingIndexById);
+          } else {
+            pingSelect.value = "";
+          }
           
           pingSelect.addEventListener("change", () => {
-            const selectedPing = state.pings[pingSelect.value];
+            const selectedPing = state.pings[Number(pingSelect.value)];
             if (selectedPing) {
-              role.name = selectedPing.category_name;
-              role.id = selectedPing.role;
+              currentRole.name = selectedPing.category_name || "";
+              currentRole.id = String(selectedPing.role || "");
               renderRoleGroups();
               updateRolesSaveState();
             }
           });
+          linkField.appendChild(linkLabel);
+          linkField.appendChild(pingSelect);
 
+          const nameField = document.createElement("div");
+          nameField.className = "role-cell";
+          const nameLabel = document.createElement("label");
+          nameLabel.textContent = "Display Name";
+          nameLabel.className = "role-cell-label";
           const nameInput = document.createElement("input");
           nameInput.type = "text";
-          nameInput.value = role.name || "";
-          nameInput.placeholder = "Role Name (Display)";
+          nameInput.value = currentRole.name || "";
+          nameInput.placeholder = "Shown in Discord picker";
           nameInput.addEventListener("input", (e) => {
-            role.name = e.target.value;
+            currentRole.name = e.target.value;
             updateRolesSaveState();
           });
-          
-          const idInput = document.createElement("input");
-          idInput.type = "text";
-          idInput.value = role.id || "";
-          idInput.placeholder = "Role ID";
-          idInput.readOnly = true; // Auto-populated from ping selection
+          nameField.appendChild(nameLabel);
+          nameField.appendChild(nameInput);
           
           const delBtn = document.createElement("button");
           delBtn.className = "danger";
@@ -1659,9 +1974,8 @@
             updateRolesSaveState();
           });
           
-          row.appendChild(pingSelect);
-          row.appendChild(nameInput);
-          row.appendChild(idInput);
+          row.appendChild(linkField);
+          row.appendChild(nameField);
           row.appendChild(delBtn);
           rolesList.appendChild(row);
         });
@@ -1710,6 +2024,8 @@
       renderSettings();
       renderBlocklist();
       renderRoleGroups();
+      updateSettingsSaveState();
+      updateRolesSaveState();
       if (Array.isArray(message.backups)) {
         renderBackupList(message.backups);
       }
@@ -3282,9 +3598,7 @@
     });
 
     btnAddBlocklist.addEventListener("click", () => {
-      state.blocklist.push("");
-      renderBlocklist();
-      updateBlocklistSaveState();
+      openBlocklistAddDialog();
     });
 
     btnSaveBlocklist.addEventListener("click", () => {
@@ -3296,6 +3610,47 @@
       renderBlocklist();
       updateBlocklistSaveState();
     });
+
+    if (blocklistAddModeCustomEl && blocklistAddModeEl) {
+      const dropdown = createSingleSelect(
+        blocklistAddModeEl.value || "plain",
+        [
+          { value: "plain", label: "Plaintext" },
+          { value: "regex", label: "Regex" },
+        ],
+        (newValue) => {
+          blocklistAddModeEl.value = newValue;
+          applyBlocklistDialogModeToggle();
+        }
+      );
+      blocklistAddModeCustomEl.innerHTML = "";
+      blocklistAddModeCustomEl.appendChild(dropdown.container);
+      blocklistAddModeDropdown = dropdown;
+    }
+    if (blocklistAddModeEl) {
+      blocklistAddModeEl.addEventListener("change", applyBlocklistDialogModeToggle);
+    }
+    if (blocklistAddValueEl) {
+      blocklistAddValueEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          addBlocklistFromDialog();
+        }
+      });
+    }
+    if (btnBlocklistAddCancelEl) {
+      btnBlocklistAddCancelEl.addEventListener("click", closeBlocklistAddDialog);
+    }
+    if (btnBlocklistAddApplyEl) {
+      btnBlocklistAddApplyEl.addEventListener("click", addBlocklistFromDialog);
+    }
+    if (blocklistAddOverlayEl) {
+      blocklistAddOverlayEl.addEventListener("click", (e) => {
+        if (e.target === blocklistAddOverlayEl) {
+          closeBlocklistAddDialog();
+        }
+      });
+    }
 
     btnAddRoleGroup.addEventListener("click", () => {
       state.self_roles.push({ title: "New Group", roles: [] });

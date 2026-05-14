@@ -185,6 +185,29 @@
     </div>
   </div>
 
+  <div id="blocklistAddOverlay" class="modal-overlay" aria-hidden="true">
+    <div id="blocklistAddModal" class="modal surface" role="dialog" aria-modal="true">
+      <h2>Add Blocklist Keyword</h2>
+      <div class="field">
+        <label>Entry Type</label>
+        <div id="blocklistAddModeCustom"></div>
+        <select id="blocklistAddMode" style="display:none;">
+          <option value="plain">Plaintext</option>
+          <option value="regex">Regex</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="blocklistAddValue">Keyword</label>
+        <input id="blocklistAddValue" type="text" placeholder="Enter keyword or regex pattern" />
+        <p class="hint" id="blocklistAddHint">Saved as plaintext.</p>
+      </div>
+      <div class="button-row modal-actions">
+        <button id="btnBlocklistAddCancel" class="tonal">Cancel</button>
+        <button id="btnBlocklistAddApply" class="primary">Add</button>
+      </div>
+    </div>
+  </div>
+
   <div id="autoGenerateOverlay" class="modal-overlay" aria-hidden="true">
     <div id="autoGenerateModal" class="modal surface" role="dialog" aria-modal="true">
       <h2 id="autoGenerateTitle">Auto-Generate Deal Ranges</h2>
