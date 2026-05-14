@@ -14,7 +14,7 @@ if [ ! -f "$FILE" ]; then
   exit 1
 fi
 
-sed -E -i.bak 's/(:[[:space:]]*)([0-9]{15,})([[:space:]]*[,}])/\1"\2"\3/g' "$FILE"
+sed -E -i.bak 's/(:[[:space:]]*)([0-9]{15,})([[:space:]]*)(,?)[[:space:]]*$/\1"\2"\3\4/' "$FILE"
 
 echo "Done. Updated: $FILE"
 echo "Backup saved: $FILE.bak"
@@ -40,4 +40,3 @@ else
   echo "Diff skipped."
   exit 0
 fi
-
