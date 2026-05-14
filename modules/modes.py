@@ -1,24 +1,24 @@
 import asyncio
 import time
+from datetime import datetime
+from typing import TYPE_CHECKING
+
 from . import ebay_api
 from . import global_vars as gv
 from .config_tools import PingConfig
-from .utils import (
-    matches_pattern,
-    is_globally_blocked,
-    matches_blocklist_override,
-    is_seller_blocked,
-    evaluate_deal,
-    change_status,
-    is_within_sleep_hours
-)
+from .enums import BuyingOption, DealRanges, Match
 from .logger import logger
-from .seen_items import seen_db
-from .enums import BuyingOption, Match, DealRanges
-from datetime import datetime
-from typing import TYPE_CHECKING
 from .psu_utils import find_psu_in_tierlist
-
+from .seen_items import seen_db
+from .utils import (
+    change_status,
+    evaluate_deal,
+    is_globally_blocked,
+    is_seller_blocked,
+    is_within_sleep_hours,
+    matches_blocklist_override,
+    matches_pattern,
+)
 
 if TYPE_CHECKING:
     from .bot import EbayScraperBot
@@ -37,11 +37,18 @@ async def match(bot: "EbayScraperBot") -> None:
                 logger.info("Currently within sleep hours, skipping current interval.")
 
                 if gv.config.sleep_hours:
-                    end = datetime.fromisoformat(f"1970-01-01T{gv.config.sleep_hours.end}").strftime("%H:%M %Z")
+                    end = datetime.fromisoformat(
+                        f"1970-01-01T{gv.config.sleep_hours.end}",
+                    ).strftime("%H:%M %Z")
                 else:
                     end = None
 
-                await change_status(bot=bot, logger=logger, message=f"Sleeping until {end}...", emoji="😴")
+                await change_status(
+                    bot=bot,
+                    logger=logger,
+                    message=f"Sleeping until {end}...",
+                    emoji="😴",
+                )
             else:
                 seen_db.clear_temp_seen()
                 await match_single_cycle(bot)
@@ -56,16 +63,32 @@ async def match(bot: "EbayScraperBot") -> None:
 
             if gv.scraper_paused:
                 logger.info("Scraper is paused. Waiting for resume command...")
-                await change_status(bot=bot, logger=logger, emoji="⏸️", message="Scraper paused, waiting for /resume...")  # noqa: E501
-                while gv.scraper_paused:
+                await change_status(
+                    bot=bot,
+                    logger=logger,
+                    emoji="⏸️",
+                    message="Scraper paused, waiting for /resume...",
+                )
+
+                while gv.scraper_paused:  # noqa: ASYNC110
                     await asyncio.sleep(1)
+
                 logger.info("Scraper resumed!")
-                await change_status(bot=bot, logger=logger, emoji="▶️", message="Scraper resumed, waiting for next action")  # noqa: E501
+                await change_status(
+                    bot=bot,
+                    logger=logger,
+                    emoji="▶️",
+                    message="Scraper resumed, waiting for next action",
+                )
 
             logger.info(f"Waiting {gv.config.poll_interval_seconds} seconds until next poll...")
 
             if not is_within_sleep_hours():
-                await change_status(bot=bot, logger=logger, message="Waiting for next scrape interval...")
+                await change_status(
+                    bot=bot,
+                    logger=logger,
+                    message="Waiting for next scrape interval...",
+                )
 
             await asyncio.sleep(gv.config.poll_interval_seconds)
 
@@ -74,7 +97,7 @@ async def match(bot: "EbayScraperBot") -> None:
             gv.scraper_was_running = False
             raise
         except Exception as e:
-            global exception_count, exceptions
+            global exception_count  # noqa: PLW0603
 
             exception_count += 1
 
@@ -88,7 +111,7 @@ async def match(bot: "EbayScraperBot") -> None:
             await asyncio.sleep(10)
 
 
-async def match_single_cycle(bot: "EbayScraperBot") -> None:
+async def match_single_cycle(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0912, PLR0915
     await change_status(bot=bot, logger=logger, message="Scraping eBay...")
 
     all_categories = set()
@@ -108,19 +131,22 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
 
     results = await asyncio.gather(*tasks)
 
-    for category_id, items in zip(all_categories, results):
+    for category_id, items in zip(all_categories, results, strict=True):
         category_cache[category_id] = items
         logger.debug(f"Cached {len(items)} items for category {category_id}")
 
     logger.debug(
-        f"Fetched {len(all_categories)} unique categories for {len(gv.config.pings)} pings"
+        f"Fetched {len(all_categories)} unique categories for {len(gv.config.pings)} pings",
     )
 
     logger.info(f"Fetched {sum(len(items) for items in results)} items from all categories")
 
     for i, ping_config in enumerate(gv.config.pings):
         combined_items = {}
-        logger.debug(f"Processing ping config #{i} ({ping_config.category_name}), which has {len(ping_to_categories[i])} categories")  # noqa: E501
+        logger.debug(
+            f"Processing ping config #{i} ({ping_config.category_name}), "
+            f"which has {len(ping_to_categories[i])} categories",
+        )
 
         for category_id in ping_to_categories[i]:
             category_items = category_cache.get(category_id, [])
@@ -129,7 +155,7 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
 
             for item_data in category_items:
                 item_data: dict
-                item_id = item_data.get('itemId', '')
+                item_id = item_data.get("itemId", "")
 
                 if item_id and item_id not in combined_items:
                     combined_items[item_id] = item_data
@@ -147,42 +173,51 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
             matched = matches_ping_criteria(item, ping_config)
 
             if matched.is_match:
-                price = _get_item_price(item, include_shipping=gv.config.include_shipping_in_deal_evaluation)
+                price = _get_item_price(
+                    item,
+                    include_shipping=gv.config.include_shipping_in_deal_evaluation,
+                )
 
                 deal = evaluate_deal(
                     price=price,
                     min_price=matched.min_price,
                     max_price=matched.max_price,
-                    deal_ranges=matched.deal_ranges
+                    deal_ranges=matched.deal_ranges,
                 )
 
-                if ping_config.is_psu:
-                    psu_matches = find_psu_in_tierlist(item.title)
-                else:
-                    psu_matches = None
+                psu_matches = find_psu_in_tierlist(item.title) if ping_config.is_psu else None
 
                 if matched.deal_ranges and deal in matched.deal_ranges.do_not_show:
-                    logger.debug(f"Item rejected: deal type '{deal.name}' is in the keyword-level do_not_show list")
+                    logger.debug(
+                        f"Item rejected: deal type '{deal.name}' is in the "
+                        "keyword-level do_not_show list",
+                    )
                     continue
 
                 if ping_config.do_not_show and deal in ping_config.do_not_show:
-                    logger.debug(f"Item rejected: deal type '{deal.name}' is in the category-level do_not_show list")
+                    logger.debug(
+                        f"Item rejected: deal type '{deal.name}' is in the "
+                        "category-level do_not_show list",
+                    )
                     continue
 
                 if item.country is not None and item.country != "US":
-                    # warning for now so i can get pinged and double check that the item is in fact not from the US
-                    logger.warning(f"Item rejected: item country '{item.country}' does not match required 'US'")
+                    logger.debug(
+                        f"Item rejected: item country '{item.country}' does not match 'US'",
+                    )
                     seen_db.mark_seen(item.full_item_id, ping_config.category_name, item.title)
                     continue
 
-                logger.info(f"New matching listing: '{item.title}' - ${item.price.value:.2f} ({deal.name})")
+                logger.info(
+                    f"New matching listing: '{item.title}' - ${item.price.value:.2f} ({deal.name})",
+                )
 
                 await bot.send_listing_notification(
                     item=item,
                     ping_config=ping_config,
                     deal=deal,
                     match_object=matched,
-                    psu=psu_matches
+                    psu=psu_matches,
                 )
 
                 seen_db.mark_seen(item.full_item_id, ping_config.category_name, item.title)
@@ -193,7 +228,7 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:
 
         if new_matches > 0:
             logger.info(
-                f"Found {new_matches} new matching listings for {ping_config.category_name}"
+                f"Found {new_matches} new matching listings for {ping_config.category_name}",
             )
         else:
             logger.debug(f"No new matches for {ping_config.category_name}")
@@ -215,16 +250,16 @@ def _get_item_price(item: ebay_api.EbayItem, include_shipping: bool = False) -> 
     return base_price + shipping_cost
 
 
-def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> Match:
+def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> Match:  # noqa: C901, PLR0912
     title_lower = item.title.lower()
 
-    matches_keyword:        bool               = False  # noqa
-    matched_keyword:        str | None         = None   # noqa
-    matching_min_price:     float | None       = None   # noqa
-    matching_max_price:     float | None       = None   # noqa
-    matching_target_price:  float | None       = None   # noqa
-    matching_friendly_name: str | None         = None   # noqa
-    matching_deal_ranges:   DealRanges | None  = None   # noqa
+    matches_keyword: bool = False
+    matched_keyword: str | None = None
+    matching_min_price: float | None = None
+    matching_max_price: float | None = None
+    matching_target_price: float | None = None
+    matching_friendly_name: str | None = None
+    matching_deal_ranges: DealRanges | None = None
 
     last_updated = ping_config.price_ranges_last_updated
 
@@ -239,22 +274,35 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
         if matches_pattern(title_lower, keyword):
             try:
                 if item.price.value:
-                    price = _get_item_price(item, include_shipping=gv.config.include_shipping_in_price_filters)
+                    price = _get_item_price(
+                        item,
+                        include_shipping=gv.config.include_shipping_in_price_filters,
+                    )
 
                     if min_price and price < min_price:
-                        logger.debug(f"Item rejected: price ${price} below min ${min_price} for keyword '{keyword}'")
+                        logger.debug(
+                            f"Item rejected: price ${price} below min ${min_price} "
+                            f"for keyword '{keyword}'",
+                        )
                         continue
 
                     if max_price and price > max_price:
-                        logger.debug(f"Item rejected: price ${price} above max ${max_price} for keyword '{keyword}'")
-                        continue
-
-                if item.condition.id:
-                    if item.condition.id and item.condition.id in gv.config.condition_blocklist:
                         logger.debug(
-                            f"Item rejected: condition ID '{item.condition.id}' ({item.condition.name}) is blocklisted"
+                            f"Item rejected: price ${price} above max ${max_price} "
+                            f"for keyword '{keyword}'",
                         )
                         continue
+
+                if (
+                    item.condition.id
+                    and item.condition.id
+                    and item.condition.id in gv.config.condition_blocklist
+                ):
+                    logger.debug(
+                        "Item rejected: condition ID "
+                        f"'{item.condition.id}' ({item.condition.name}) is blocklisted",
+                    )
+                    continue
             except (ValueError, TypeError):
                 pass
 
@@ -277,7 +325,7 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             friendly_name=None,
             deal_ranges=None,
             regex=None,
-            last_updated=last_updated
+            last_updated=last_updated,
         )
 
     logger.debug(f"Item matched keyword '{matched_keyword}': {item.title}...")
@@ -292,21 +340,23 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
                 friendly_name=None,
                 deal_ranges=None,
                 regex=None,
-                last_updated=last_updated
+                last_updated=last_updated,
             )
 
-    if is_globally_blocked(title_lower, "", ""):
-        if not matches_blocklist_override(title_lower, override_patterns=ping_config.blocklist_override):
-            return Match(
-                is_match=False,
-                min_price=None,
-                max_price=None,
-                target_price=None,
-                friendly_name=None,
-                deal_ranges=None,
-                regex=None,
-                last_updated=last_updated
-            )
+    if is_globally_blocked(title_lower, "", "") and not matches_blocklist_override(
+        title_lower,
+        override_patterns=ping_config.blocklist_override,
+    ):
+        return Match(
+            is_match=False,
+            min_price=None,
+            max_price=None,
+            target_price=None,
+            friendly_name=None,
+            deal_ranges=None,
+            regex=None,
+            last_updated=last_updated,
+        )
 
     if is_seller_blocked(item.seller.username):
         logger.debug(f"Item rejected: seller '{item.seller.username}' is blocklisted")
@@ -318,7 +368,7 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             friendly_name=None,
             deal_ranges=None,
             regex=None,
-            last_updated=last_updated
+            last_updated=last_updated,
         )
 
     if BuyingOption.FIXED_PRICE not in item.buying_options:
@@ -330,7 +380,7 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             friendly_name=None,
             deal_ranges=None,
             regex=None,
-            last_updated=last_updated
+            last_updated=last_updated,
         )
 
     return Match(
@@ -341,5 +391,5 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
         friendly_name=matching_friendly_name,
         deal_ranges=matching_deal_ranges,
         regex=matched_keyword,
-        last_updated=last_updated
+        last_updated=last_updated,
     )

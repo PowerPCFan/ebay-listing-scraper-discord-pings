@@ -1,10 +1,11 @@
-import json5
-from pathlib import Path
 from dataclasses import dataclass, field
-from .enums import PriceRange, DealRanges, Deal, DealTuple
+from pathlib import Path
 
+import json5
 
-CONFIG_JSON_POSSIBLE = ["config.json", "config.jsonc", "config.json5"]
+from .enums import Deal, DealRanges, DealTuple, PriceRange
+
+CONFIG_JSON_POSSIBLE = ["config.json", "config.jsonc"]
 CONFIG_JSON = None
 
 for filename in CONFIG_JSON_POSSIBLE:
@@ -14,6 +15,27 @@ for filename in CONFIG_JSON_POSSIBLE:
         break
 
 GLOBAL_BLOCKLIST_TXT = Path(__file__).parent.parent / "global_blocklist.txt"
+
+
+def get_config_path() -> Path:
+    if CONFIG_JSON is None:
+        msg = "No config file found. Please create a config.json or config.jsonc file."
+        raise FileNotFoundError(msg)
+    return CONFIG_JSON
+
+
+def get_raw_config() -> str:
+    with get_config_path().open(encoding="utf-8") as f:
+        return f.read()
+
+
+def get_parsed_config() -> dict:
+    raw = get_raw_config()
+    data = json5.loads(raw)
+    if not isinstance(data, dict):
+        msg = "Config root must be a JSON object."
+        raise TypeError(msg)
+    return data
 
 
 @dataclass
@@ -26,13 +48,13 @@ class GlobalBlocklist:
             GLOBAL_BLOCKLIST_TXT.touch()
             return GlobalBlocklist()
 
-        with open(GLOBAL_BLOCKLIST_TXT, 'r', encoding='utf-8') as f:
+        with GLOBAL_BLOCKLIST_TXT.open(encoding="utf-8") as f:
             lines = [line.strip() for line in f.readlines() if line.strip()]
 
         return GlobalBlocklist(items=lines)
 
     def save(self) -> None:
-        with open(GLOBAL_BLOCKLIST_TXT, 'w', encoding='utf-8') as f:
+        with GLOBAL_BLOCKLIST_TXT.open("w", encoding="utf-8") as f:
             for item in self.items:
                 f.write(f"{item}\n")
 
@@ -76,7 +98,7 @@ class SelfRoleGroup:
     roles: list[SelfRole] = field(default_factory=list)
 
 
-type Keywords = list[Keyword]
+Keywords = list[Keyword]
 
 
 @dataclass
@@ -130,18 +152,19 @@ class Config:
     logger_webhook: str | None = None
     logger_webhook_ping: int | None = None
     sleep_hours: SleepHours | None = None
+    config_editor_password: str | None = None
 
     @staticmethod
-    def load() -> "Config":
-        if CONFIG_JSON is None:
-            raise FileNotFoundError(
-                "No config file found. Please create a config.json, config.jsonc, or config.json5 file."
-            )
-
-        with open(CONFIG_JSON) as f:
-            data: dict = json5.load(f)
+    def load() -> "Config":  # noqa: C901, PLR0912, PLR0915
+        data: dict = get_parsed_config()
 
         data.pop("$schema", None)
+        data.pop("config_editor", None)
+
+        # The global blocklist is stored in global_blocklist.txt, not in the main config.
+        # Older/buggy editor versions may have written it into the config root.
+        data.pop("blocklist", None)
+        data.pop("global_blocklist", None)
 
         pings_data = data.pop("pings", [])
         self_roles_data = data.pop("self_roles", [])
@@ -150,26 +173,45 @@ class Config:
         self_roles: list[SelfRoleGroup] = []
         sleep_hours: SleepHours | None = None
 
+        def _to_int(val: str | int) -> int:
+            if isinstance(val, str):
+                return int(val)
+            elif isinstance(val, int):
+                return val
+
+            try:
+                return int(val)
+            except Exception as e:
+                msg = f"Error converting {val} to an int: {e}"
+                raise ValueError(msg) from e
+
         for ping_data in pings_data:
+            if "channel_id" in ping_data:
+                ping_data["channel_id"] = _to_int(ping_data["channel_id"])
+            if "role" in ping_data:
+                ping_data["role"] = _to_int(ping_data["role"])
+            if "categories" in ping_data and isinstance(ping_data["categories"], list):
+                ping_data["categories"] = [_to_int(c) for c in ping_data["categories"]]
+
             if ping_data.get("keywords") and isinstance(ping_data["keywords"], list):
                 keywords = []
                 for kw_data in ping_data["keywords"]:
                     deal_ranges = None
                     if "deal_ranges" in kw_data:
-                        deal_ranges_data: dict = kw_data.pop("deal_ranges")
+                        ranges_data: dict = kw_data.pop("deal_ranges")
 
-                        fire_deal: dict = deal_ranges_data.get("fire_deal", {"start": 0, "end": 0})
-                        great_deal: dict = deal_ranges_data.get("great_deal", {"start": 0, "end": 0})
-                        good_deal: dict = deal_ranges_data.get("good_deal", {"start": 0, "end": 0})
-                        ok_deal: dict = deal_ranges_data.get("ok_deal", {"start": 0, "end": 0})
-                        do_not_show: list[str] = deal_ranges_data.get("do_not_show", [])
+                        fire_deal: dict = ranges_data.get("fire_deal", {"start": 0, "end": 0})
+                        great_deal: dict = ranges_data.get("great_deal", {"start": 0, "end": 0})
+                        good_deal: dict = ranges_data.get("good_deal", {"start": 0, "end": 0})
+                        ok_deal: dict = ranges_data.get("ok_deal", {"start": 0, "end": 0})
+                        do_not_show: list[str] = ranges_data.get("do_not_show", [])
 
                         deal_ranges = DealRanges(
                             fire_deal=PriceRange(**fire_deal),
                             great_deal=PriceRange(**great_deal),
                             good_deal=PriceRange(**good_deal),
                             ok_deal=PriceRange(**ok_deal),
-                            do_not_show=[getattr(Deal, dns.upper()) for dns in do_not_show]
+                            do_not_show=[getattr(Deal, dns.upper()) for dns in do_not_show],
                         )
 
                     keyword = Keyword(deal_ranges=deal_ranges, **kw_data)
@@ -185,16 +227,22 @@ class Config:
         for group_data in self_roles_data:
             roles = []
             for role_data in group_data.get("roles", []):
+                if "id" in role_data:
+                    role_data["id"] = _to_int(role_data["id"])
                 roles.append(SelfRole(**role_data))
-            if len(roles) > 25:
-                raise ValueError("A self-role group cannot have more than 25 roles due to Discord limitations.")
-            self_roles.append(SelfRoleGroup(
-                title=group_data["title"],
-                roles=roles
-            ))
+
+            max_roles = 25
+            if len(roles) > max_roles:
+                msg = "A self-role group cannot have more than 25 roles due to Discord limitations."
+                raise ValueError(msg)
+            self_roles.append(SelfRoleGroup(title=group_data["title"], roles=roles))
 
         if sleep_hours_data:
             sleep_hours = SleepHours(**sleep_hours_data)
+
+        for key in ["discord_guild_id", "admin_role_id", "logger_webhook_ping"]:
+            if key in data:
+                data[key] = _to_int(data[key])
 
         return Config(pings=pings, self_roles=self_roles, sleep_hours=sleep_hours, **data)
 
@@ -205,13 +253,3 @@ def reload_config() -> Config:
 
 def reload_global_blocklist() -> GlobalBlocklist:
     return GlobalBlocklist.load()
-
-
-def get_raw_config() -> str:
-    if CONFIG_JSON is None:
-        raise FileNotFoundError(
-            "No config file found. Please create a config.json, config.jsonc, or config.json5 file."
-        )
-
-    with open(CONFIG_JSON, "r", encoding="utf-8") as f:
-        return f.read()

@@ -4,6 +4,7 @@
     "type": "object",
     "additionalProperties": false,
     "properties": {
+        "$schema": { "type": "string" },
         "debug_mode": { "type": "boolean" },
         "discord_py_debug_mode": { "type": "boolean" },
         "log_api_responses": { "type": "boolean" },
@@ -21,8 +22,9 @@
         "ebay_dev_id": { "type": "string" },
 
         "discord_bot_token": { "type": "string" },
-        "discord_guild_id": { "type": "integer" },
-        "admin_role_id": { "type": "integer" },
+        "discord_guild_id": { "type": "string" },
+        "admin_role_id": { "type": "string" },
+        "config_editor_password": { "type": "string" },
 
         "seller_blocklist": {
             "type": "array",
@@ -34,7 +36,7 @@
         },
 
         "logger_webhook": { "type": ["string", "null"] },
-        "logger_webhook_ping": { "type": ["integer", "null"] },
+        "logger_webhook_ping": { "type": ["string", "null"] },
 
         "sleep_hours": {
             "type": ["object", "null"],
@@ -123,8 +125,8 @@
                             "required": ["keyword"]
                         }
                     },
-                    "channel_id": { "type": "integer" },
-                    "role": { "type": "integer" },
+                    "channel_id": { "type": "string" },
+                    "role": { "type": "string" },
                     "price_ranges_last_updated": { "type": "string", "format": "date-time" },
                     "exclude_keywords": {
                         "type": "array",
@@ -159,7 +161,7 @@
                             "additionalProperties": false,
                             "properties": {
                                 "name": { "type": "string" },
-                                "id": { "type": "integer" }
+                                "id": { "type": "string" }
                             },
                             "required": ["name", "id"]
                         }

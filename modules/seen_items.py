@@ -1,15 +1,15 @@
 import sqlite3
 import time
 from pathlib import Path
-from .logger import logger
 
+from .logger import logger
 
 db_path = Path(__file__).parent.parent / "data" / "processed-listings.db"
 db_path.parent.mkdir(parents=True, exist_ok=True)
 
 
 class SeenItemsDB:
-    def __init__(self, db_path=db_path) -> None:
+    def __init__(self, db_path: Path = db_path) -> None:
         self.db_path = db_path
         self.item_queue: list[tuple[str, int, str | None, str]] = []
         self.temp_seen: set[str] = set()

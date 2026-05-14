@@ -1,8 +1,7 @@
 import json
-from pathlib import Path
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
-
 
 ROLE_PICKER_STATE_FILE = Path(__file__).parent.parent / "picker_states.json"
 ROLE_PICKER_STATE_FILE.touch(exist_ok=True)
@@ -32,39 +31,40 @@ class RolePickerStates:
             return RolePickerStates()
 
         try:
-            with open(ROLE_PICKER_STATE_FILE, 'r', encoding='utf-8') as f:
+            with ROLE_PICKER_STATE_FILE.open(encoding="utf-8") as f:
                 data: list[dict[str, Any]] = json.load(f)
 
             states = []
             for state_data in data:
                 roles = [
-                    RolePickerRole(name=str(role['name']), id=int(role['id']))
-                    for role in state_data.get('roles', [])
+                    RolePickerRole(name=str(role["name"]), id=int(role["id"]))
+                    for role in state_data.get("roles", [])
                 ]
 
                 state = RolePickerState(
-                    title=state_data['title'],
+                    title=state_data["title"],
                     roles=roles,
-                    message_ids=state_data.get('message_ids', []),
-                    created_at=state_data.get('created_at', 'unknown')
+                    message_ids=state_data.get("message_ids", []),
+                    created_at=state_data.get("created_at", "unknown"),
                 )
                 states.append(state)
 
             return RolePickerStates(states=states)
-        except (json.JSONDecodeError, IOError, KeyError):
+        except (json.JSONDecodeError, OSError, KeyError):
             return RolePickerStates()
 
-    def save(self):
-        data = []
-        for state in self.states:
-            data.append({
-                'title': state.title,
-                'roles': [{'name': role.name, 'id': role.id} for role in state.roles],
-                'message_ids': state.message_ids,
-                'created_at': state.created_at
-            })
+    def save(self) -> None:
+        data = [
+            {
+                "title": state.title,
+                "roles": [{"name": role.name, "id": role.id} for role in state.roles],
+                "message_ids": state.message_ids,
+                "created_at": state.created_at,
+            }
+            for state in self.states
+        ]
 
-        with open(ROLE_PICKER_STATE_FILE, 'w', encoding='utf-8') as f:
+        with ROLE_PICKER_STATE_FILE.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
 
 

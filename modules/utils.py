@@ -1,28 +1,31 @@
 import os
-import sys
-import signal
-import discord
-import subprocess
 import re as regexp
-from typing import TYPE_CHECKING, Any
-from datetime import datetime, timezone
+import signal
+import subprocess
+import sys
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
+import discord
+
 from . import global_vars as gv
 from .enums import (
-    BuyingOptions,
     BuyingOption,
-    ShippingType,
-    ShippingOption,
+    BuyingOptions,
     Deal,
+    DealRanges,
     DealTuple,
-    DealRanges
+    ShippingOption,
+    ShippingType,
 )
-
+from .logger import logger
 
 if TYPE_CHECKING:
     from .bot import EbayScraperBot
+    from .logger import CustomLogger
 
 
-def matches_pattern(text: str, pattern: str, regex_prefix: str = 'regexp::') -> bool:
+def matches_pattern(text: str, pattern: str, regex_prefix: str = "regexp::") -> bool:
     text_lower = text.lower()
 
     if pattern.startswith(regex_prefix):
@@ -33,7 +36,7 @@ def matches_pattern(text: str, pattern: str, regex_prefix: str = 'regexp::') -> 
             matches = regexp.findall(
                 pattern=regex_pattern,
                 string=text_lower,
-                flags=regexp.IGNORECASE
+                flags=regexp.IGNORECASE,
             )
             return bool(matches)
         except regexp.error:
@@ -53,7 +56,7 @@ def is_within_sleep_hours() -> bool:
         start_dt = datetime.fromisoformat(f"1970-01-01T{start_str}")
         end_dt = datetime.fromisoformat(f"1970-01-01T{end_str}")
 
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(UTC)
         now_in_sleep_tz = now_utc.astimezone(start_dt.tzinfo)
 
         current_time = now_in_sleep_tz.timetz()
@@ -62,12 +65,11 @@ def is_within_sleep_hours() -> bool:
 
         if start_time <= end_time:
             return start_time <= current_time <= end_time
-        else:
+        else:  # noqa: RET505
             return current_time >= start_time or current_time <= end_time
-    except (ValueError, TypeError) as e:
-        from .logger import logger
-        logger.error(f"Invalid sleep_hours format. Expected HH:MM+/-HH:MM (e.g., '23:00-05:00'): {e}")
-        raise ValueError(f"Invalid sleep_hours configuration: {e}") from e
+    except (ValueError, TypeError):
+        logger.exception("Invalid sleep_hours format. Expected HH:MM+/-HH:MM (e.g., '23:00-05:00')")
+        return True
 
 
 def is_globally_blocked(content: str, extra1: str = "", extra2: str = "") -> bool:
@@ -87,7 +89,7 @@ def matches_blocklist_override(
     content: str,
     extra1: str = "",
     extra2: str = "",
-    override_patterns: list[str] | None = None
+    override_patterns: list[str] | None = None,
 ) -> bool:
     if not override_patterns:
         return False
@@ -115,7 +117,7 @@ def is_seller_blocked(seller_username: str | None) -> bool:
 
 
 def create_discord_timestamp(timestamp: str | int, suffix: str = "f") -> str:
-    return f"<t:{str(timestamp)}:{suffix}>"
+    return f"<t:{timestamp!s}:{suffix}>"
 
 
 def get_listing_type_display(buying_options: BuyingOptions) -> str:
@@ -138,16 +140,11 @@ def get_listing_type_display(buying_options: BuyingOptions) -> str:
     if not labels:
         return "Unknown"
 
-    result = ", ".join(labels)
-
-    return result
+    return ", ".join(labels)
 
 
 def iso_to_unix_timestamp(iso_string: str) -> int:
-    datetime_obj = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
-    unix_timestamp = int(datetime_obj.replace(tzinfo=timezone.utc).timestamp())
-
-    return unix_timestamp
+    return int(datetime.fromisoformat(iso_string).replace(tzinfo=UTC).timestamp())
 
 
 def generate_shipping_string(shipping: ShippingOption) -> str:
@@ -178,11 +175,8 @@ def build_shipping_embed_value(shipping: ShippingOption | None) -> str:
     arrival_info = ""
 
     if shipping.min_estimated_delivery_date and shipping.max_estimated_delivery_date:
-        # min_ts = create_discord_timestamp((shipping.min_estimated_delivery_date or 0), suffix='D')
-        # max_ts = create_discord_timestamp((shipping.max_estimated_delivery_date or 0), suffix='D')
-        min_ts = create_discord_timestamp((shipping.min_estimated_delivery_date or 0), suffix='d')
-        max_ts = create_discord_timestamp((shipping.max_estimated_delivery_date or 0), suffix='d')
-        # arrival_info = f"\nArrival Date: {min_ts} to {max_ts}"
+        # min_ts = create_discord_timestamp((shipping.min_estimated_delivery_date or 0), suffix="d")
+        max_ts = create_discord_timestamp((shipping.max_estimated_delivery_date or 0), suffix="d")
         arrival_info = f"\nArrives by {max_ts}"
 
     return shipping_cost + arrival_info
@@ -202,19 +196,16 @@ def format_price(price: float | None, currency: str | None = None) -> str:
 
 def get_ebay_seller_url(username: str | None) -> str:
     if not username:
-        # note: this URL supports the param ?sellerName=... to add a message that says:
-        # "💡Tip: Try searching for "{sellerName}" on eBay."
-        # however with how this function works, username would be None here, so we can't add that param
         return "https://www.powerpcfan.xyz/ebay-listing-scraper-discord-pings-internal/error-retrieving-seller-url"
 
     return f"https://www.ebay.com/sch/i.html?_ssn={username}"
 
 
-def evaluate_deal(
+def evaluate_deal(  # noqa: PLR0911
     price: float | None,
     min_price: float | None,
     max_price: float | None,
-    deal_ranges: DealRanges | None = None
+    deal_ranges: DealRanges | None = None,
 ) -> DealTuple:
     if price is None:
         return Deal.UNKNOWN_DEAL
@@ -242,7 +233,7 @@ def evaluate_deal(
     if price <= min_price + quarter:
         # price is in the first quarter
         return Deal.FIRE_DEAL
-    elif price <= min_price + 2 * quarter:
+    elif price <= min_price + 2 * quarter:  # noqa: RET505
         # price is in the second quarter
         return Deal.GREAT_DEAL
     elif price <= min_price + 3 * quarter:
@@ -260,24 +251,30 @@ def sigint_current_process() -> None:
 
 
 def restart_current_process() -> None:
-    os.execv(sys.executable, [sys.executable] + sys.argv)
+    os.execv(sys.executable, [sys.executable, *sys.argv])  # noqa: S606
 
 
 def restart_current_process_2() -> None:
-    python = sys.executable
-    subprocess.Popen([python] + sys.argv)
+    subprocess.Popen([sys.executable, *sys.argv])  # noqa: S603
     sys.exit(0)
 
 
-async def change_status(bot: 'EbayScraperBot', logger: Any | None, message: str, emoji: str | None = None) -> None:
+async def change_status(
+    bot: "EbayScraperBot",
+    logger: "CustomLogger | None",
+    message: str,
+    emoji: str | None = None,
+) -> None:
     try:
         status_message = f"{emoji} {message}" if emoji else message
 
-        await bot.change_presence(activity=discord.Activity(
-            type=discord.ActivityType.custom,
-            name="Custom Status",
-            state=status_message
-        ))
+        await bot.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.custom,
+                name="Custom Status",
+                state=status_message,
+            ),
+        )
 
         if logger:
             logger.debug(f"Changed Discord presence to '{status_message}'")
@@ -285,13 +282,11 @@ async def change_status(bot: 'EbayScraperBot', logger: Any | None, message: str,
         if logger:
             logger.exception("Failed to change Discord presence:")
 
-    return None
-
 
 def determine_risk(
     feedback_score: float | None,
     positive_feedback: float | None,
-    title: str
+    title: str,  # noqa: ARG001
 ) -> tuple[bool, str | None]:
     """
     Determines the risk level of a listing based on seller attributes.
@@ -300,13 +295,25 @@ def determine_risk(
     """  # noqa: E501
 
     if feedback_score is None and positive_feedback is None:
-        return (True, "The seller has no feedback, which could indicate a new account or lack of sale history.")
+        return (
+            True,
+            (
+                "The seller has no feedback, which could indicate a "
+                "new account or lack of sale history."
+            ),
+        )
 
-    if not positive_feedback or positive_feedback < 90.0:
+    feedback_threshold = 90.0
+    feedback_score_threshold = 40
+
+    if not positive_feedback or positive_feedback < feedback_threshold:
         positive_feedback = positive_feedback or 0.0
-        return (True, f"The seller has a low positive feedback percentage of {positive_feedback:.2f}%.")
+        return (
+            True,
+            f"The seller has a low positive feedback percentage of {positive_feedback:.2f}%.",
+        )
 
-    if not feedback_score or feedback_score < 40:
+    if not feedback_score or feedback_score < feedback_score_threshold:
         feedback_score = feedback_score or 0.0
         return (True, f"The seller has a low feedback score of {feedback_score:.0f}.")
 

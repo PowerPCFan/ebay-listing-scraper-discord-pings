@@ -1,16 +1,26 @@
-import time
 import base64
-import httpx
+import time
 from pathlib import Path
 from typing import Any, cast
+
+import httpx
+
 from . import global_vars as gv
+from .enums import (
+    BuyingOption,
+    BuyingOptions,
+    Categories,
+    Category,
+    Condition,
+    MarketplaceID,
+    Price,
+    Seller,
+    ShippingOption,
+    ShippingOptions,
+    ShippingType,
+)
 from .logger import logger
 from .utils import iso_to_unix_timestamp
-from .enums import (
-    Category, Categories, Price, Seller, Condition, BuyingOption,
-    BuyingOptions, ShippingType, ShippingOption, ShippingOptions,
-    MarketplaceID
-)
 
 if gv.config.log_api_responses:
     import json
@@ -18,6 +28,18 @@ if gv.config.log_api_responses:
 else:
     json = None
     datetime = None
+
+
+json_datetime_alert = "\n".join(
+    [
+        "Something went wrong, information:",
+        "The JSON and Datetime modules are only imported when gv.config.log_api_responses is True.",
+        "This function should only be called when gv.config.log_api_responses is True.",
+        "However, it somehow was called when gv.config.log_api_responses is False, leading to the module being missing.",  # noqa: E501
+        "This is likely a bug in the code, if you are the developer fix this, and if you are a user report this on GitHub.",  # noqa: E501
+        "(Also a reminder that this isn't really designed to be a user-facing tool, it's a project that I wrote for myself so there aren't any docs and stuffs)",  # noqa: E501
+    ],
+)
 
 
 _token_cache: str | None = None
@@ -28,24 +50,25 @@ api_url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
 
 
 async def get_http_client() -> httpx.AsyncClient:
-    global _http_client
+    global _http_client  # noqa: PLW0603
     if _http_client is None:
         _http_client = httpx.AsyncClient(timeout=30.0)
     return _http_client
 
 
 async def close_http_client() -> None:
-    global _http_client
+    global _http_client  # noqa: PLW0603
     if _http_client is not None:
         await _http_client.aclose()
         _http_client = None
 
 
 def _get_response_json_filename() -> Path:
-    assert datetime is not None
+    if datetime is None:
+        raise RuntimeError(json_datetime_alert)
 
     directory = Path(__file__).parent.parent / "responses"
-    path = directory / f"response-{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.json"
+    path = directory / f"response-{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
 
     directory.mkdir(exist_ok=True, parents=True)
     path.touch(exist_ok=True)
@@ -60,7 +83,7 @@ class EbayItem:
 
     @property
     def item_id(self) -> int:
-        id = self.data.get("legacyItemId", 0)
+        id = self.data.get("legacyItemId", 0)  # noqa: A001
         return int(id)
 
     @property
@@ -84,7 +107,7 @@ class EbayItem:
 
             new_cat_obj = Category(
                 id=int(cat_id) if cat_id else None,
-                name=str(cat_name) if cat_name else None
+                name=str(cat_name) if cat_name else None,
             )
 
             new_cats.append(new_cat_obj)
@@ -99,9 +122,8 @@ class EbayItem:
 
     @property
     def thumbnail(self) -> str | None:
-        thumb = dict(self.data.get(
-            "image", {}
-        )).get("imageUrl", None)  # for some reason image is smaller than thumbnail
+        # for some reason image is smaller than thumbnail
+        thumb = dict(self.data.get("image", {})).get("imageUrl", None)
 
         return str(thumb) if thumb else None
 
@@ -125,13 +147,10 @@ class EbayItem:
     def price(self) -> Price:
         _price = dict(self.data.get("price", {}))
 
-        p = _price.get("value", None)
-        c = _price.get("currency", None)
+        p = _price.get("value")
+        c = _price.get("currency")
 
-        return Price(
-            currency=str(c) if c else None,
-            value=float(p) if p else None
-        )
+        return Price(currency=str(c) if c else None, value=float(p) if p else None)
 
     @property
     def url(self) -> str:
@@ -142,9 +161,9 @@ class EbayItem:
     def seller(self) -> Seller:
         seller_obj = dict(self.data.get("seller", {}))
 
-        username = seller_obj.get("username", None)
-        feedback_score = seller_obj.get("feedbackScore", None)
-        _fbp = seller_obj.get("feedbackPercentage", None)
+        username = seller_obj.get("username")
+        feedback_score = seller_obj.get("feedbackScore")
+        _fbp = seller_obj.get("feedbackPercentage")
         feedback_percentage = float(_fbp) if _fbp is not None else None
 
         if not feedback_percentage or feedback_percentage <= 0.0:
@@ -153,7 +172,7 @@ class EbayItem:
         return Seller(
             username=str(username) if username else None,
             feedback_score=int(feedback_score) if feedback_score else None,
-            feedback_percentage=float(feedback_percentage) if feedback_percentage else None
+            feedback_percentage=float(feedback_percentage) if feedback_percentage else None,
         )
 
     @property
@@ -163,7 +182,7 @@ class EbayItem:
 
         return Condition(
             id=int(condition_id) if condition_id else None,
-            name=str(condition_name) if condition_name else None
+            name=str(condition_name) if condition_name else None,
         )
 
     @property
@@ -190,39 +209,47 @@ class EbayItem:
 
     @property
     def shipping(self) -> ShippingOptions:
-        old_shipping_options: list[dict[str, str | dict[str, str]]] = self.data.get("shippingOptions", [])
+        old_shipping_options: list[dict[str, str | dict[str, str]]] = self.data.get(
+            "shippingOptions", [],
+        )
         new_shipping_options: ShippingOptions = []
 
         for old_option in old_shipping_options:
             try:
-                shipping_type = ShippingType(cast(str, old_option.get("shippingCostType", "")))
+                shipping_type = ShippingType(cast("str", old_option.get("shippingCostType", "")))
             except ValueError:
                 shipping_type = ShippingType.UNKNOWN
 
-            shipping_cost_data = cast(dict[str, str], old_option.get("shippingCost", {}))
+            shipping_cost_data = cast("dict[str, str]", old_option.get("shippingCost", {}))
             shipping_cost_data_currency = shipping_cost_data.get("currency", None)
             shipping_cost_data_value = shipping_cost_data.get("value", None)
             shipping_cost = Price(
                 currency=str(shipping_cost_data_currency) if shipping_cost_data_currency else None,
-                value=float(shipping_cost_data_value) if shipping_cost_data_value else None
+                value=float(shipping_cost_data_value) if shipping_cost_data_value else None,
             )
 
-            min_estimated_delivery_date_iso = cast(str | None, old_option.get("minEstimatedDeliveryDate", None))
-            max_estimated_delivery_date_iso = cast(str | None, old_option.get("maxEstimatedDeliveryDate", None))
+            min_estimated_delivery_date_iso = cast(
+                "str | None", old_option.get("minEstimatedDeliveryDate", None),
+            )
+            max_estimated_delivery_date_iso = cast(
+                "str | None", old_option.get("maxEstimatedDeliveryDate", None),
+            )
             min_estimated_delivery_date = (
-                iso_to_unix_timestamp(min_estimated_delivery_date_iso) if
-                min_estimated_delivery_date_iso else None
+                iso_to_unix_timestamp(min_estimated_delivery_date_iso)
+                if min_estimated_delivery_date_iso
+                else None
             )
             max_estimated_delivery_date = (
-                iso_to_unix_timestamp(max_estimated_delivery_date_iso) if
-                max_estimated_delivery_date_iso else None
+                iso_to_unix_timestamp(max_estimated_delivery_date_iso)
+                if max_estimated_delivery_date_iso
+                else None
             )
 
             new_option = ShippingOption(
                 type=shipping_type,
                 cost=shipping_cost,
                 min_estimated_delivery_date=min_estimated_delivery_date,
-                max_estimated_delivery_date=max_estimated_delivery_date
+                max_estimated_delivery_date=max_estimated_delivery_date,
             )
 
             new_shipping_options.append(new_option)
@@ -237,8 +264,7 @@ class EbayItem:
             return None
 
         try:
-            id_enum = MarketplaceID(id_str)
-            return id_enum
+            return MarketplaceID(id_str)
         except ValueError:
             return None
 
@@ -254,7 +280,7 @@ class EbayItem:
 
 
 async def get_valid_token() -> str | None:
-    global _token_cache, _token_expires_at
+    global _token_cache, _token_expires_at  # noqa: PLW0603
 
     current_time = int(time.time())
 
@@ -263,28 +289,32 @@ async def get_valid_token() -> str | None:
         return _token_cache
 
     try:
-        credentials = base64.b64encode(f"{gv.config.ebay_app_id}:{gv.config.ebay_cert_id}".encode()).decode()
+        credentials = base64.b64encode(
+            f"{gv.config.ebay_app_id}:{gv.config.ebay_cert_id}".encode(),
+        ).decode()
 
         client = await get_http_client()
         response = await client.post(
             "https://api.ebay.com/identity/v1/oauth2/token",
             headers={
                 "Content-Type": "application/x-www-form-urlencoded",
-                "Authorization": f"Basic {credentials}"
+                "Authorization": f"Basic {credentials}",
             },
             data={
                 "grant_type": "client_credentials",
-                "scope": "https://api.ebay.com/oauth/api_scope"
-            }
+                "scope": "https://api.ebay.com/oauth/api_scope",
+            },
         )
 
-        if response.status_code != 200:
+        if response.status_code != 200:  # noqa: PLR2004
             logger.error(f"Token request failed: {response.status_code} {response.text}")
             return None
 
         data = dict(response.json())
         _token_cache = data["access_token"]
-        _token_expires_at = current_time + data.get("expires_in", 7200) - 120  # Refresh 2 minutes before expiry
+        _token_expires_at = (
+            current_time + data.get("expires_in", 7200) - 120
+        )  # Refresh 2 minutes before expiry
 
         logger.debug("New OAuth token generated successfully")
         return _token_cache
@@ -298,7 +328,8 @@ async def initialize() -> bool:
     token = await get_valid_token()
 
     if not token:
-        raise ValueError("Failed to generate eBay OAuth token")
+        msg = "Failed to generate eBay OAuth token"
+        raise ValueError(msg)
 
     logger.debug("eBay Browse API connection initialized successfully")
 
@@ -317,14 +348,14 @@ async def search_single_category(category_id: str, price_filter: str = "") -> li
             "category_ids": category_id,
             "filter": "buyingOptions:{FIXED_PRICE|AUCTION}" + price_filter,
             "sort": "newlyListed",
-            "limit": str(gv.limit)
+            "limit": str(gv.limit),
         }
 
         headers = {
             "Authorization": f"Bearer {token}",
             "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
             "Content-Type": "application/json",
-            "Accept": "application/json"
+            "Accept": "application/json",
         }
 
         gv.api_call_count += 1
@@ -332,25 +363,21 @@ async def search_single_category(category_id: str, price_filter: str = "") -> li
         response = await client.get(api_url, params=params, headers=headers)
 
         if gv.config.log_api_responses:
-            assert json is not None
-
+            if not json:
+                raise RuntimeError(json_datetime_alert)  # noqa: TRY301
             parsed = response.json()
-            with open(
-                _get_response_json_filename(),
-                mode="w",
-                encoding="utf-8"
-            ) as f:
+            with _get_response_json_filename().open(mode="w", encoding="utf-8") as f:
                 logger.debug("Writing response to file for debugging purposes...")
                 json.dump(parsed, f, indent=4, ensure_ascii=False)
                 logger.debug("Done.")
 
         if response.status_code in (401, 403):
-            global _token_cache, _token_expires_at
+            global _token_cache, _token_expires_at  # noqa: PLW0603
             _token_cache = None
             _token_expires_at = 0
             return []
 
-        if response.status_code != 200:
+        if response.status_code != 200:  # noqa: PLR2004
             logger.error(f"eBay API error for category {category_id}: {response.status_code}")
             return []
 
@@ -358,7 +385,7 @@ async def search_single_category(category_id: str, price_filter: str = "") -> li
         if not data.get("itemSummaries"):
             return []
 
-        return [item for item in data["itemSummaries"]]
+        return list(data["itemSummaries"])
 
     except Exception:
         logger.exception(f"Error searching category {category_id}:")

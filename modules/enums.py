@@ -1,7 +1,7 @@
 import math
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import NamedTuple
-from dataclasses import dataclass, field
 
 
 @dataclass
@@ -19,7 +19,7 @@ def rounding_as_taught_in_school(val: float) -> int:
 
     floored = math.floor(val)
 
-    if val - floored < 0.5:
+    if val - floored < 0.5:  # noqa: PLR2004
         return floored
     return math.ceil(val)
 
@@ -30,9 +30,9 @@ class DealRanges:
     great_deal: PriceRange
     good_deal: PriceRange
     ok_deal: PriceRange
-    do_not_show: list['DealTuple'] = field(default_factory=list)
+    do_not_show: list["DealTuple"] = field(default_factory=list)
 
-    def get_deal_type(self, float_price: float) -> 'DealTuple':
+    def get_deal_type(self, float_price: float) -> "DealTuple":
         price = rounding_as_taught_in_school(float_price)
 
         if self.fire_deal.contains(price):
@@ -52,7 +52,7 @@ class Category(NamedTuple):
     name: str | None
 
 
-type Categories = list[Category]
+Categories = list[Category]
 
 
 class Price(NamedTuple):
@@ -97,7 +97,7 @@ class BuyingOption(Enum):
     AUCTION = "AUCTION"
 
 
-type BuyingOptions = list[BuyingOption]
+BuyingOptions = list[BuyingOption]
 
 
 class ShippingType(Enum):
@@ -113,13 +113,13 @@ class ShippingOption(NamedTuple):
     max_estimated_delivery_date: int | None
 
 
-type ShippingOptions = list[ShippingOption]
+ShippingOptions = list[ShippingOption]
 
 
 class MarketplaceID(Enum):
     """
     Source: [eBay API Docs](https://developer.ebay.com/api-docs/sell/account/types/ba:MarketplaceIdEnum#s0-1-30-4-7-5-children-heading)
-    """  # noqa: E501
+    """
 
     EBAY_AT = "EBAY_AT"
     EBAY_AU = "EBAY_AU"
@@ -213,29 +213,29 @@ class Deal:
     FIRE_DEAL = DealTuple(
         name="Fire Deal",
         emoji=DealEmojis.FIRE_DEAL,
-        color=DealColors.FIRE_DEAL
+        color=DealColors.FIRE_DEAL,
     )
 
     GREAT_DEAL = DealTuple(
         name="Great Deal",
         emoji=DealEmojis.GREAT_DEAL,
-        color=DealColors.GREAT_DEAL
+        color=DealColors.GREAT_DEAL,
     )
 
     GOOD_DEAL = DealTuple(
         name="Good Deal",
         emoji=DealEmojis.GOOD_DEAL,
-        color=DealColors.GOOD_DEAL
+        color=DealColors.GOOD_DEAL,
     )
 
     OK_DEAL = DealTuple(
         name="Average Deal",
         emoji=DealEmojis.OK_DEAL,
-        color=DealColors.OK_DEAL
+        color=DealColors.OK_DEAL,
     )
 
     UNKNOWN_DEAL = DealTuple(
         name="Unknown Deal",
         emoji=DealEmojis.UNKNOWN,
-        color=DealColors.UNKNOWN
+        color=DealColors.UNKNOWN,
     )

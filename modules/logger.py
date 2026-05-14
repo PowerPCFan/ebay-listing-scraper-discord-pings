@@ -1,3 +1,7 @@
+# this file is a nightmare
+# fmt: off
+# ruff: noqa
+
 import logging
 import asyncio
 from datetime import datetime, timezone, timedelta

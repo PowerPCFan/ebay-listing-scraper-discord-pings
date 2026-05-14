@@ -1,5 +1,8 @@
-import httpx
 import asyncio
+
+import httpx
+
+tasks = set()
 
 
 async def _send_async(webhook_url: str, content: str) -> None:
@@ -7,7 +10,7 @@ async def _send_async(webhook_url: str, content: str) -> None:
         async with httpx.AsyncClient(timeout=10.0) as client:
             await client.post(
                 webhook_url,
-                json={"content": content}
+                json={"content": content},
             )
     except Exception:
         # use print instead of logger to avoid infinite error loop
@@ -18,7 +21,9 @@ def send(webhook_url: str, content: str) -> None:
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            asyncio.create_task(_send_async(webhook_url, content))
+            task = asyncio.create_task(_send_async(webhook_url, content))
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
         else:
             asyncio.run(_send_async(webhook_url, content))
     except RuntimeError:

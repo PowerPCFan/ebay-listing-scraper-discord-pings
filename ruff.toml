@@ -1,0 +1,57 @@
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+line-length = 100
+
+target-version = "py311"
+
+select = ["ALL"]
+ignore = [
+    "UP015",   # Checks for redundant open modes
+    "INP001",  # Checks for missing __init__.py
+    "D",       # Annoying docstring stuff
+    "BLE",     # Blind `except Exception` (i should probably get used to not doing this lol)
+    "T201",    # Alerts when you use `print` statements
+    "T203",
+    "G004",    # Alerts when you use an F-string in a logger call
+    "ERA",     # Checks for commented out code
+    "F821",    # Checks for undefined names - disable due to Pylance/Pyright reportUndefinedVariable overlap
+    "FBT001",  # Checks for boolean positional arguments stuff
+    "FBT002",
+    "TRY300",  # Checks for return statements in try blocks - this is really annoying lol
+    "RET505",  # Checks for elif/else after a return statement - this is also annoying
+    "FLY002",  # Checks for str.join calls and tries to replace with f-strings - not a great suggestion in most cases
+]
+
+fixable = ["ALL"]
+unfixable = []
+
+[format]
+quote-style = "double"
+indent-style = "space"

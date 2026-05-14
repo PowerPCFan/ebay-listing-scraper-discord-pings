@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Config Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&family=Geist:wght@100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/config-editor/styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="surface app-header">
+      <div>
+        <h1>eBay Scraper Config Editor</h1>
+        <p class="hint">Notice: This page was built with AI tools. It has been thoroughly tested, but it may contain bugs or unexpected behavior.</p>
+      </div>
+      <span id="status" class="status-chip">Connecting...</span>
+    </section>
+
+    <section class="surface topbar">
+      <div class="tabs" role="tablist" aria-label="Editor sections">
+        <button class="tab-btn active" data-tab="pingPanel" role="tab">Pings</button>
+        <button class="tab-btn" role="tab" data-tab="settingsPanel">Settings</button>
+        <button class="tab-btn" data-tab="blocklistPanel" role="tab">Global Blocklist</button>
+        <button class="tab-btn" data-tab="rolesPanel" role="tab">Role Pickers</button>
+        <button class="tab-btn" data-tab="backupsPanel" role="tab">Backups</button>
+      </div>
+      <div class="button-row">
+        <button id="btnExportBlocklist" class="tonal">Export Blocklist</button>
+        <button id="btnExport" class="tonal">Export JSON</button>
+      </div>
+    </section>
+
+    <section id="pingPanel" class="surface panel active">
+      <div class="ping-layout">
+        <aside class="surface nested sidebar">
+          <div class="button-row">
+            <button id="btnAddPing">Add Ping</button>
+            <button id="btnRemovePing" class="danger">Remove</button>
+          </div>
+          <div id="pingList"></div>
+        </aside>
+
+        <div class="stack">
+          <section class="surface nested card">
+            <header class="card-head">
+              <h2>Ping Details</h2>
+              <div class="button-row">
+                <button id="btnDuplicatePing" class="tonal">Duplicate</button>
+                <button id="btnMovePingUp" class="tonal">↑</button>
+                <button id="btnMovePingDown" class="tonal">↓</button>
+              </div>
+            </header>
+            <div id="pingForm" class="grid"></div>
+          </section>
+
+          <section class="surface nested card">
+            <header class="card-head">
+              <h2>Keywords & Deal Ranges</h2>
+              <button id="btnAddKeyword">Add Keyword</button>
+            </header>
+            <div id="keywordCards"></div>
+          </section>
+
+          <section id="pingSaveDock" class="surface nested card save-dock ping-save-dock" aria-hidden="true">
+            <header class="card-head">
+              <p class="hint save-note">Save applies all changes in the selected ping.</p>
+              <div class="button-row">
+                <button id="btnDiscard" class="danger" disabled>Discard Changes</button>
+                <button id="btnSavePing" class="primary">All Changes Saved</button>
+              </div>
+            </header>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section id="settingsPanel" class="surface panel">
+      <header class="panel-header">
+        <div class="header-main">
+          <h2>Global Settings</h2>
+          <p class="hint">Configure bot-wide settings, Discord IDs, and general behavior.</p>
+        </div>
+      </header>
+
+      <div id="settingsContainer" class="list-editor-container">
+        <!-- Settings will be rendered here -->
+      </div>
+
+      <div class="save-dock">
+        <button id="btnSaveSettings" class="primary" disabled>All Changes Saved</button>
+        <button id="btnDiscardSettings" class="danger" style="display: none;">Discard Changes</button>
+      </div>
+    </section>
+
+    <section id="blocklistPanel" class="surface panel">
+      <header class="panel-header">
+        <div class="header-main">
+          <h2>Global Blocklist</h2>
+          <p class="hint">Keywords added here will suppress pings across all categories.</p>
+        </div>
+        <button id="btnAddBlocklist" class="tonal">Add Keyword</button>
+      </header>
+
+      <div id="blocklistContainer" class="list-editor-container">
+        <!-- Rows will be rendered here -->
+      </div>
+
+      <div id="blocklistDiffView" class="diff-view">
+        <h3 style="margin: 0 0 8px 0; font-size: 0.95rem;">Blocklist Changes</h3>
+        <div id="blocklistDiffItems"></div>
+      </div>
+
+      <div class="save-dock">
+        <button id="btnSaveBlocklist" class="primary" disabled>All Changes Saved</button>
+        <button id="btnDiscardBlocklist" class="danger" style="display: none;">Discard Changes</button>
+        <button id="btnToggleBlocklistDiff" class="tonal" style="display: none;">Show Changes</button>
+      </div>
+    </section>
+
+    <section id="rolesPanel" class="surface panel">
+      <header class="panel-header">
+        <div class="header-main">
+          <h2>Role Pickers</h2>
+          <p class="hint">Create groups of roles that users can assign to themselves on Discord.</p>
+        </div>
+        <button id="btnAddRoleGroup" class="tonal">Add Group</button>
+      </header>
+
+      <div id="roleGroupsContainer" class="list-editor-container">
+        <!-- Role groups will be rendered here -->
+      </div>
+
+      <div class="save-dock">
+        <button id="btnSaveRoles" class="primary" disabled>All Changes Saved</button>
+        <button id="btnDiscardRoles" class="danger" style="display: none;">Discard Changes</button>
+      </div>
+    </section>
+
+    <section id="backupsPanel" class="surface panel">
+      <section class="surface nested card">
+        <header class="card-head">
+          <h2>Backups</h2>
+          <div class="button-row">
+            <button id="btnRestoreBackup" class="tonal">Restore Selected</button>
+            <button id="btnDeleteBackup" class="danger" disabled>Delete Selected</button>
+            <button id="btnCreateManualBackup" class="primary">Create Manual Backup</button>
+          </div>
+        </header>
+        <label for="backupList">Select a backup to restore</label>
+        <select id="backupList" class="backup-list" size="10"></select>
+        <p id="backupMeta" class="hint">No backup selected.</p>
+      </section>
+    </section>
+
+  </main>
+
+  <div id="confirmOverlay" class="modal-overlay" aria-hidden="true">
+    <div id="confirmModal" class="modal surface" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmBody">
+      <h2 id="confirmTitle">Confirm Action</h2>
+      <p id="confirmBody" class="hint">Are you sure?</p>
+      <div class="button-row modal-actions">
+        <button id="confirmCancelBtn">Cancel</button>
+        <button id="confirmOkBtn" class="primary">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="arrayEditorOverlay" class="modal-overlay" aria-hidden="true">
+    <div id="arrayEditorModal" class="modal surface" role="dialog" aria-modal="true">
+      <h2 id="arrayEditorTitle">Edit List</h2>
+      <div id="arrayItemsList" class="array-items-grid"></div>
+      <div class="field">
+        <label for="arrayNewItemInput">Add New Item</label>
+        <div class="button-row no-justify">
+          <input type="text" id="arrayNewItemInput" placeholder="Enter value..." />
+          <button id="btnArrayAddItem" class="primary">Add</button>
+        </div>
+      </div>
+      <div class="button-row modal-actions">
+        <button id="btnArrayClose" class="primary">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="autoGenerateOverlay" class="modal-overlay" aria-hidden="true">
+    <div id="autoGenerateModal" class="modal surface" role="dialog" aria-modal="true">
+      <h2 id="autoGenerateTitle">Auto-Generate Deal Ranges</h2>
+      <p class="hint">Choose a component type, fill the fields, and generate regex + deal ranges.</p>
+      
+      <div class="grid">
+        <div class="field">
+          <label for="autoComponentType">Component Type</label>
+          <select id="autoComponentType"></select>
+        </div>
+
+        <div id="autoComponentFields" class="field full">
+          <div class="grid" id="autoComponentFieldsGrid"></div>
+        </div>
+
+        <div class="field">
+          <label for="autoFriendlyName">Friendly Name</label>
+          <input type="text" id="autoFriendlyName" placeholder="Leave blank to auto-fill" />
+        </div>
+        
+        <div class="field">
+          <label for="autoMinPrice">Minimum Price ($, Optional)</label>
+          <input type="number" id="autoMinPrice" placeholder="Leave blank to use suggested minimum" min="0" />
+          <p class="hint" id="minPriceHint">Suggested: $0</p>
+        </div>
+        
+        <div class="field">
+          <label for="autoTargetPrice">Target Price ($)</label>
+          <input type="number" id="autoTargetPrice" placeholder="e.g., 100" min="0" />
+        </div>
+
+        <div class="field">
+          <label for="autoMaxPrice">Maximum Price ($, Optional)</label>
+          <input type="number" id="autoMaxPrice" placeholder="Leave blank to use suggested maximum" min="0" />
+          <p class="hint" id="maxPriceHint">Suggested: $0</p>
+        </div>
+        
+        <div class="field">
+          <label for="autoKeyword">Keyword / Regex</label>
+          <input type="text" id="autoKeyword" placeholder="Generated from selected component type" readonly />
+        </div>
+      </div>
+      
+      <div class="button-row modal-actions">
+        <button id="btnAutoGenerateCancel" class="tonal">Cancel</button>
+        <button id="btnAutoGenerateApply" class="primary">Generate</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="unsavedChangesOverlay" class="modal-overlay" aria-hidden="true">
+    <div id="unsavedChangesModal" class="modal surface" role="dialog" aria-modal="true">
+      <h2 id="unsavedChangesTitle">Unsaved Changes</h2>
+      <p id="unsavedChangesBody">You have unsaved changes! Please select an action:</p>
+      <div class="button-row modal-actions">
+        <button id="btnSwitchCancel" class="tonal">Cancel</button>
+        <button id="btnSwitchDiscard" class="danger">Discard & Switch</button>
+        <button id="btnSwitchSave" class="primary">Save & Switch</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sessionExpiryOverlay" class="modal-overlay" aria-hidden="true">
+    <div id="sessionExpiryModal" class="modal surface" role="dialog" aria-modal="true">
+      <h2 id="sessionExpiryTitle">Session Expiring</h2>
+      <p id="sessionExpiryBody">Your session will expire in 5 minutes. Would you like to extend it by 30 minutes?</p>
+      <div class="button-row modal-actions">
+        <button id="btnSessionLogout" class="danger">Log out</button>
+        <button id="btnSessionExtend" class="primary">Extend Session</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/config-editor/app.js"></script>
+</body>
+</html>
