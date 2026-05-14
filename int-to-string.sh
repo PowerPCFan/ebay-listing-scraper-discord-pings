@@ -25,5 +25,19 @@ if cmp -s "$FILE.bak" "$FILE"; then
 fi
 
 echo
-echo "Changes:"
-git diff --no-index --color=always -- "$FILE.bak" "$FILE" || true
+
+read -p "Changes were made. Do you want to see the diff? (Y/n) " showdiff
+if [[ "${showdiff:-Y}" =~ ^[Yy]([eE][sS])?$ ]]; then
+  read -p "Would you like to use a pager? (Y/n) " usepager
+  if [[ "${usepager:-Y}" =~ ^[Yy]([eE][sS])?$ ]]; then
+    echo "Changes:"
+    git diff --no-index --color=always -- "$FILE.bak" "$FILE" || true
+  else
+    echo "Changes (no pager):"
+    git --no-pager diff --no-index --color=always -- "$FILE.bak" "$FILE" || true
+  fi
+else
+  echo "Diff skipped."
+  exit 0
+fi
+
