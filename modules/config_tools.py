@@ -152,7 +152,10 @@ class Config:
     logger_webhook: str | None = None
     logger_webhook_ping: int | None = None
     sleep_hours: SleepHours | None = None
+
     config_editor_password: str | None = None
+    config_editor_host: str | None = None
+    config_editor_port: int | None = None
 
     @staticmethod
     def load() -> "Config":  # noqa: C901, PLR0912, PLR0915

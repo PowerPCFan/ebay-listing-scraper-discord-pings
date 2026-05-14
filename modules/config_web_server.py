@@ -24,21 +24,13 @@ from .config_tools import (
 )
 from .logger import logger
 
-HOST = "127.0.0.1"
-PORT = 8080
+HOST = gv.config.config_editor_host or "127.0.0.1"
+PORT = gv.config.config_editor_port or 8080
 AUTH_COOKIE_NAME = "config_editor_auth"
 BACKUP_DIR = Path(__file__).parent.parent / "config-backups"
 STATIC_DIR = Path(__file__).parent.parent / "static"
 CONFIG_EDITOR_INDEX = STATIC_DIR / "config-editor" / "index.html"
 EDITOR_METADATA_PATH = Path(__file__).parent.parent / "config-editor-metadata.json"
-
-
-def _default_keyword_editor_meta() -> dict[str, Any]:
-    return {
-        "mode": "manual",
-        "component_type": None,
-        "component_data": {},
-    }
 
 
 def _reconcile_editor_metadata(metadata: Any, parsed: dict[str, Any]) -> dict[str, Any]:
