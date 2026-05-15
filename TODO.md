@@ -6,8 +6,13 @@
 - improve seller flagging system
 - as long as this isn't against ebay terms of service and as long as rate limits are per api key and not per ip, create a second developer account and set up a dual API system to double the amount of daily calls available
 - note: lots of the above suggestions to myself are meant to save API calls, this is so I can do more calls and more often searches across more categories improving the scraper overall
-- write docstrings (some but not all have been written)
 - stop debug logs from going to discord (i thought i did that before lol)
   - fix logging in general its so messy
   - also maybe use the bot instead of a webhook for logging? or will that make the user facing messages take longer to send
 - in the future i want to implement something where a View gets sent to a mod only channel where i can select which PSU it matches since my matches are far from perfect so one listing might match multiple PSUs
+- fix weird 404s on commands--unknown interaction error 10062 when reloading config with command--i remember this used to happen but retrying command would fix, now its totally broken it seems
+- config editor:
+  - work on deal slider thing
+  - add back buttons to shift up/down all prices per keyword
+  - add some validation especially for prices, e.g. if target price > max price
+    - for this maybe it could just be an automatic thing like if you set target to 90 while max is 80 itll automatically change max to 91, or something like that idk

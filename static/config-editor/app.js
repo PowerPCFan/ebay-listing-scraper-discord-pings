@@ -2478,12 +2478,12 @@
     editor.className = "field full tier-editor";
 
     const label = document.createElement("label");
-    label.textContent = "Unified Deal Range Control";
+    label.textContent = "Deal Ranges";
     editor.appendChild(label);
 
     const hint = document.createElement("p");
     hint.className = "hint";
-    hint.textContent = "Drag handles to set min, tier thresholds, and max in one place.";
+    hint.textContent = "Drag handles to set deal ranges.";
     editor.appendChild(hint);
 
     if (!keyword.deal_ranges || typeof keyword.deal_ranges !== "object") {
