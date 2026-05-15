@@ -13,8 +13,7 @@
   <main class="app-shell">
     <section class="surface app-header">
       <div>
-        <h1>eBay Scraper Config Editor</h1>
-        <p class="hint">Notice: This page was built with AI tools. It has been thoroughly tested, but it may contain bugs or unexpected behavior.</p>
+        <h1>eBay Listing Scraper Config Editor</h1>
       </div>
       <span id="status" class="status-chip">Connecting...</span>
     </section>
@@ -65,13 +64,13 @@
           </section>
 
           <section id="pingSaveDock" class="surface nested card save-dock ping-save-dock" aria-hidden="true">
-            <header class="card-head">
-              <p class="hint save-note">Save applies all changes in the selected ping.</p>
+            <div>
+              <p class="hint save-note">Careful, you have unsaved changes!</p>
               <div class="button-row">
-                <button id="btnDiscard" class="danger" disabled>Discard Changes</button>
+                <button id="btnDiscard" class="danger" disabled>Discard</button>
                 <button id="btnSavePing" class="primary">All Changes Saved</button>
               </div>
-            </header>
+            </div>
           </section>
         </div>
       </div>

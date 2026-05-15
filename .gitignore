@@ -2,6 +2,7 @@ venv/
 tierlist/
 # wildcard to also ignore jsonc, json5, etc
 config.json*
+config.*.json*
 *.pyc
 **/__pycache__/
 version-*-backup/

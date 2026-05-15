@@ -372,6 +372,45 @@
     }
   }
 
+  function deepEqualForDirtyCheck(a, b, path = "") {
+    if (a === b) return true;
+
+    const aIsArray = Array.isArray(a);
+    const bIsArray = Array.isArray(b);
+    if (aIsArray || bIsArray) {
+      if (!aIsArray || !bIsArray) return false;
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i += 1) {
+        if (!deepEqualForDirtyCheck(a[i], b[i], `${path}[${i}]`)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    const aIsObj = a && typeof a === "object";
+    const bIsObj = b && typeof b === "object";
+    if (aIsObj || bIsObj) {
+      if (!aIsObj || !bIsObj) return false;
+
+      const aKeys = Object.keys(a).sort();
+      const bKeys = Object.keys(b).sort();
+
+      if (aKeys.length !== bKeys.length) return false;
+      for (let i = 0; i < aKeys.length; i += 1) {
+        if (aKeys[i] !== bKeys[i]) return false;
+        const key = aKeys[i];
+        const nextPath = path ? `${path}.${key}` : key;
+        if (!deepEqualForDirtyCheck(a[key], b[key], nextPath)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    return Object.is(a, b);
+  }
+
   function markPingChanged() {
     if (!state || !originalState) {
       hasPendingPingChanges = false;
@@ -380,11 +419,64 @@
       const origPing = originalState.pings[selectedPingIndex];
       const currentMeta = state.editor_metadata?.pings?.[selectedPingIndex] || null;
       const origMeta = originalState.editor_metadata?.pings?.[selectedPingIndex] || null;
-      hasPendingPingChanges =
-        JSON.stringify(currentPing) !== JSON.stringify(origPing) ||
-        JSON.stringify(currentMeta) !== JSON.stringify(origMeta);
+
+      const pingEqual = deepEqualForDirtyCheck(currentPing, origPing);
+      const metaEqual = deepEqualForDirtyCheck(currentMeta, origMeta);
+      hasPendingPingChanges = !pingEqual || !metaEqual;
+
+      if (
+        !hasPendingPingChanges &&
+        currentPing &&
+        origPing &&
+        currentPing.price_ranges_last_updated !== origPing.price_ranges_last_updated
+      ) {
+        currentPing.price_ranges_last_updated = origPing.price_ranges_last_updated;
+        const input = document.querySelector('input[data-field="price_ranges_last_updated"]');
+        if (input) {
+          const date = new Date(origPing.price_ranges_last_updated);
+          input.value = date.toISOString().slice(0, 16);
+        }
+      }
     }
     updatePingSaveButtonState();
+  }
+
+  function touchSelectedPingTimestampIfNeeded() {
+    if (!hasPendingPingChanges) return;
+    if (!state || !state.pings || !state.pings.length) return;
+
+    const currentPing = state.pings[selectedPingIndex];
+    const originalPing = originalState?.pings?.[selectedPingIndex];
+    if (!currentPing || !originalPing || typeof currentPing !== "object") return;
+
+    const currentKeywords = Array.isArray(currentPing.keywords) ? currentPing.keywords : [];
+    const originalKeywords = Array.isArray(originalPing.keywords) ? originalPing.keywords : [];
+
+    let shouldTouch = currentKeywords.length !== originalKeywords.length;
+
+    if (!shouldTouch) {
+      for (let i = 0; i < currentKeywords.length; i += 1) {
+        const currentKeyword = currentKeywords[i] || {};
+        const originalKeyword = originalKeywords[i] || {};
+
+        const minChanged = !Object.is(currentKeyword.min_price ?? null, originalKeyword.min_price ?? null);
+        const maxChanged = !Object.is(currentKeyword.max_price ?? null, originalKeyword.max_price ?? null);
+        const targetChanged = !Object.is(currentKeyword.target_price ?? null, originalKeyword.target_price ?? null);
+        const rangesChanged = !deepEqualForDirtyCheck(
+          currentKeyword.deal_ranges ?? null,
+          originalKeyword.deal_ranges ?? null,
+        );
+
+        if (minChanged || maxChanged || targetChanged || rangesChanged) {
+          shouldTouch = true;
+          break;
+        }
+      }
+    }
+
+    if (shouldTouch) {
+      touchPriceRangesLastUpdated(currentPing);
+    }
   }
 
   function touchPriceRangesLastUpdated(ping) {
@@ -1355,8 +1447,6 @@
       keywordMeta.component_data = cloneJson(autoComponentState[componentType] || {});
     }
 
-    touchPriceRangesLastUpdated(ping);
-
     closeAutoGenerateModal();
     renderKeywords(ping);
     markPingChanged();
@@ -1472,7 +1562,6 @@
 
     keyword.keyword = generated.keyword;
     keyword.friendly_name = generated.friendlyName;
-    touchPriceRangesLastUpdated(ping);
     return true;
   }
 
@@ -2598,7 +2687,6 @@
       applyToKeyword();
 
       if (markDirty) {
-        touchPriceRangesLastUpdated(ping);
         markPingChanged();
       }
     }
@@ -3439,9 +3527,6 @@
           input.addEventListener("change", () => {
             if (type === "number") {
               keyword[key] = input.value === "" ? null : Number(input.value);
-              if (key === "min_price" || key === "max_price" || key === "target_price") {
-                touchPriceRangesLastUpdated(ping);
-              }
               if (key === "min_price" || key === "max_price") {
                 validateKeywordPrices(keyword);
                 renderKeywords(ping);
@@ -3479,9 +3564,6 @@
           input.addEventListener("change", () => {
             if (type === "number") {
               keyword[key] = input.value === "" ? null : Number(input.value);
-              if (key === "min_price" || key === "max_price" || key === "target_price") {
-                touchPriceRangesLastUpdated(ping);
-              }
               if (key === "min_price" || key === "max_price") {
                 validateKeywordPrices(keyword);
                 renderKeywords(ping);
@@ -3579,6 +3661,7 @@
         return;
       }
       
+      touchSelectedPingTimestampIfNeeded();
       send(buildSaveParsedPayload());
       setStatus("Saving ping changes...", "ok");
     });
@@ -3659,6 +3742,7 @@
     });
 
     btnSaveRoles.addEventListener("click", () => {
+      touchSelectedPingTimestampIfNeeded();
       send(buildSaveParsedPayload());
     });
 
@@ -3669,6 +3753,7 @@
     });
 
     btnSaveSettings.addEventListener("click", () => {
+      touchSelectedPingTimestampIfNeeded();
       send(buildSaveParsedPayload());
     });
 
@@ -3743,6 +3828,7 @@
       selectedPingIndex = Math.max(0, selectedPingIndex - 1);
       
       // Auto-save the state after removal since it's a high-intent action
+      touchSelectedPingTimestampIfNeeded();
       send(buildSaveParsedPayload());
       
       renderPingList();
@@ -3873,6 +3959,7 @@
       window.pendingPingSwitch = target;
     });
     document.getElementById("btnSwitchSave").addEventListener("click", () => {
+      touchSelectedPingTimestampIfNeeded();
       send(buildSaveParsedPayload());
       const target = switchTargetIndex;
       closeSwitchModal();

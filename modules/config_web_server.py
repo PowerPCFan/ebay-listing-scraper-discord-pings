@@ -5,7 +5,7 @@ import hmac
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import json5
 from aiohttp import WSMsgType, web
@@ -14,6 +14,7 @@ from aiohttp.client_exceptions import ClientConnectionResetError
 from . import global_vars as gv
 from .bot import bot as discord_bot
 from .config_tools import (
+    Config,
     get_config_path,
     get_parsed_config,
     get_raw_config,
@@ -348,24 +349,8 @@ def _password_fingerprint(password: str) -> str:
 
 
 def _get_config_editor_password() -> str | None:
-    parsed = get_parsed_config()
-
-    candidate: str | None = None
-    direct = parsed.get("config_editor_password")
-    if isinstance(direct, str):
-        candidate = direct
-
-    editor_obj = parsed.get("config_editor")
-    if isinstance(editor_obj, dict):
-        nested = editor_obj.get("password")
-        if isinstance(nested, str):
-            candidate = nested
-
-    if candidate is None:
-        return None
-
-    normalized = candidate.strip()
-    return normalized or None
+    direct = get_parsed_config().get("config_editor_password")
+    return direct.strip() if direct else None
 
 
 def _is_editor_authenticated(request: web.Request) -> bool:
@@ -475,13 +460,31 @@ async def handle_health(_request: web.Request) -> web.Response:
     return web.json_response({"status": "ok", "port": PORT})
 
 
-def _get_discord_metadata() -> dict[str, Any]:
-    metadata = {"ready": True, "guilds": []}
+class ChannelOrRoleMetadata(TypedDict):
+    id: str
+    name: str
+
+
+class GuildsMetadata(TypedDict):
+    id: str
+    name: str
+    channels: list[ChannelOrRoleMetadata]
+    roles: list[ChannelOrRoleMetadata]
+
+
+class Metadata(TypedDict):
+    ready: bool
+    guilds: list[GuildsMetadata]
+
+
+def _get_discord_metadata() -> Metadata:
+    metadata: Metadata = {"ready": True, "guilds": []}
+
     try:
         if hasattr(discord_bot, "is_ready") and discord_bot.is_ready():
             guild = discord_bot.get_guild(gv.config.discord_guild_id)
             if guild:
-                g_data = {
+                g_data: GuildsMetadata = {
                     "id": str(guild.id),
                     "name": guild.name,
                     "channels": [],
@@ -489,10 +492,14 @@ def _get_discord_metadata() -> dict[str, Any]:
                 }
                 for channel in guild.text_channels:
                     g_data["channels"].append({"id": str(channel.id), "name": channel.name})
-                for role in guild.roles:
-                    if role.is_default():
-                        continue
+
+                # create list with no default roles + then reverse so it's in hierarchy high -> low
+                roles = [role for role in guild.roles if not role.is_default()]
+                roles.reverse()
+
+                for role in roles:
                     g_data["roles"].append({"id": str(role.id), "name": role.name})
+
                 metadata["guilds"].append(g_data)
     except Exception as e:
         logger.error(f"Error fetching Discord metadata: {e}")
@@ -506,14 +513,19 @@ def _ws_state_payload() -> dict[str, Any]:
     raw = get_raw_config()
     parsed = get_parsed_config()
     editor_metadata = _load_editor_metadata(parsed)
+
     _save_editor_metadata(editor_metadata, parsed)
+
     gv.global_blocklist = reload_global_blocklist()
     blocklist_items = list(gv.global_blocklist.items)
+
+    normalized_parsed = Config.from_dict(parsed).to_dict()
+
     return {
         "type": "state",
         "config_path": config_path,
         "raw": raw,
-        "parsed": parsed,
+        "parsed": normalized_parsed,
         "editor_metadata": editor_metadata,
         "global_blocklist": blocklist_items,
         "backups": _list_backups(),

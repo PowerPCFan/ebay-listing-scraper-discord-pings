@@ -473,9 +473,9 @@ textarea.invalid {
   padding: 12px;
 }
 
-.save-note {
+/* .save-note {
   margin-right: auto;
-}
+} */
 
 .keyword-quick-adjust {
   display: flex;
@@ -541,7 +541,8 @@ textarea.invalid {
   font-size: 0.7rem;
   font-weight: 700;
   color: #fff;
-  background: #64748b;
+  /* background: #64748b; */
+  background: transparent;
 }
 
 .tier-value {
@@ -554,36 +555,6 @@ textarea.invalid {
 
 .tier-label {
   margin-right: 2px;
-}
-
-.tier-icon.min,
-.tier-handle.min::-webkit-slider-thumb,
-.tier-handle.min::-moz-range-thumb {
-  background: #475569;
-}
-
-.tier-icon.fire,
-.tier-handle.fire::-webkit-slider-thumb,
-.tier-handle.fire::-moz-range-thumb {
-  background: #dc2626;
-}
-
-.tier-icon.great,
-.tier-handle.great::-webkit-slider-thumb,
-.tier-handle.great::-moz-range-thumb {
-  background: #ea580c;
-}
-
-.tier-icon.good,
-.tier-handle.good::-webkit-slider-thumb,
-.tier-handle.good::-moz-range-thumb {
-  background: #ca8a04;
-}
-
-.tier-icon.max,
-.tier-handle.max::-webkit-slider-thumb,
-.tier-handle.max::-moz-range-thumb {
-  background: #65a30d;
 }
 
 .tier-handle {
@@ -1075,6 +1046,19 @@ button.loading {
   border-width: 0;
   margin-top: 0;
   margin-bottom: 0;
+}
+
+.ping-save-dock div {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ping-save-dock div .button-row {
+  flex: 1;
+  justify-content: flex-end;
 }
 
 .ping-save-dock.visible {

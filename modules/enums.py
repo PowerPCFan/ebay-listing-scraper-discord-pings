@@ -1,7 +1,7 @@
 import math
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import NamedTuple
+from typing import NamedTuple, Self
 
 
 @dataclass
@@ -12,6 +12,13 @@ class PriceRange:
     def contains(self, price: float) -> bool:
         # check if a price falls within the range
         return self.start <= price <= self.end
+
+    def to_dict(self) -> dict[str, float]:
+        return {"start": self.start, "end": self.end}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, float]) -> Self:
+        return cls(start=data["start"], end=data["end"])
 
 
 def rounding_as_taught_in_school(val: float) -> int:
@@ -31,6 +38,25 @@ class DealRanges:
     good_deal: PriceRange
     ok_deal: PriceRange
     do_not_show: list["DealTuple"] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "fire_deal": self.fire_deal.to_dict(),
+            "great_deal": self.great_deal.to_dict(),
+            "good_deal": self.good_deal.to_dict(),
+            "ok_deal": self.ok_deal.to_dict(),
+            "do_not_show": [deal.id.lower() for deal in self.do_not_show],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Self:
+        return cls(
+            fire_deal=PriceRange.from_dict(data["fire_deal"]),
+            great_deal=PriceRange.from_dict(data["great_deal"]),
+            good_deal=PriceRange.from_dict(data["good_deal"]),
+            ok_deal=PriceRange.from_dict(data["ok_deal"]),
+            do_not_show=[Deal.from_str(deal_name) for deal_name in data.get("do_not_show", [])],
+        )
 
     def get_deal_type(self, float_price: float) -> "DealTuple":
         price = rounding_as_taught_in_school(float_price)
@@ -200,6 +226,7 @@ class DealColors:
 
 
 class DealTuple(NamedTuple):
+    id: str
     name: str
     emoji: str
     color: int
@@ -211,31 +238,47 @@ class Deal:
     """
 
     FIRE_DEAL = DealTuple(
+        id="FIRE_DEAL",
         name="Fire Deal",
         emoji=DealEmojis.FIRE_DEAL,
         color=DealColors.FIRE_DEAL,
     )
 
     GREAT_DEAL = DealTuple(
+        id="GREAT_DEAL",
         name="Great Deal",
         emoji=DealEmojis.GREAT_DEAL,
         color=DealColors.GREAT_DEAL,
     )
 
     GOOD_DEAL = DealTuple(
+        id="GOOD_DEAL",
         name="Good Deal",
         emoji=DealEmojis.GOOD_DEAL,
         color=DealColors.GOOD_DEAL,
     )
 
     OK_DEAL = DealTuple(
+        id="OK_DEAL",
         name="Average Deal",
         emoji=DealEmojis.OK_DEAL,
         color=DealColors.OK_DEAL,
     )
 
     UNKNOWN_DEAL = DealTuple(
+        id="UNKNOWN_DEAL",
         name="Unknown Deal",
         emoji=DealEmojis.UNKNOWN,
         color=DealColors.UNKNOWN,
     )
+
+    @classmethod
+    def from_str(cls, deal_str: str) -> DealTuple:
+        deal_str = deal_str.strip().upper().replace(" ", "_")
+
+        for deal in [cls.FIRE_DEAL, cls.GREAT_DEAL, cls.GOOD_DEAL, cls.OK_DEAL, cls.UNKNOWN_DEAL]:
+            if deal.id == deal_str:
+                return deal
+
+        msg = f"Invalid deal string: {deal_str}"
+        raise ValueError(msg)

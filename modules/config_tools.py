@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Self, overload
 
 import json5
 
-from .enums import Deal, DealRanges, DealTuple, PriceRange
+from .enums import Deal, DealRanges, DealTuple
 
 CONFIG_JSON_POSSIBLE = ["config.json", "config.jsonc"]
 CONFIG_JSON = None
@@ -42,16 +43,16 @@ def get_parsed_config() -> dict:
 class GlobalBlocklist:
     items: list[str] = field(default_factory=list)
 
-    @staticmethod
-    def load() -> "GlobalBlocklist":
+    @classmethod
+    def load(cls) -> Self:
         if not GLOBAL_BLOCKLIST_TXT.exists():
             GLOBAL_BLOCKLIST_TXT.touch()
-            return GlobalBlocklist()
+            return cls()
 
         with GLOBAL_BLOCKLIST_TXT.open(encoding="utf-8") as f:
             lines = [line.strip() for line in f.readlines() if line.strip()]
 
-        return GlobalBlocklist(items=lines)
+        return cls(items=lines)
 
     def save(self) -> None:
         with GLOBAL_BLOCKLIST_TXT.open("w", encoding="utf-8") as f:
@@ -85,17 +86,56 @@ class Keyword:
     friendly_name: str | None = None
     deal_ranges: DealRanges | None = None
 
+    def to_dict(self) -> dict:
+        return {
+            "keyword": self.keyword,
+            "min_price": self.min_price,
+            "max_price": self.max_price,
+            "target_price": self.target_price,
+            "friendly_name": self.friendly_name,
+            "deal_ranges": self.deal_ranges.to_dict() if self.deal_ranges else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Self:
+        ranges = data.get("deal_ranges")
+
+        return cls(
+            keyword=data["keyword"],
+            min_price=data.get("min_price"),
+            max_price=data.get("max_price"),
+            target_price=data.get("target_price"),
+            friendly_name=data.get("friendly_name"),
+            deal_ranges=DealRanges.from_dict(ranges) if ranges else None,
+        )
+
 
 @dataclass
 class SelfRole:
     name: str
     id: int
 
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "id": Config.to_str(self.id),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, str]) -> Self:
+        return cls(name=data["name"], id=Config.to_int(data["id"]))
+
 
 @dataclass
 class SelfRoleGroup:
     title: str
     roles: list[SelfRole] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "title": self.title,
+            "roles": [role.to_dict() for role in self.roles],
+        }
 
 
 Keywords = list[Keyword]
@@ -114,11 +154,53 @@ class PingConfig:
     do_not_show: list[DealTuple] = field(default_factory=list)
     is_psu: bool = False
 
+    def to_dict(self) -> dict:
+        return {
+            "category_name": self.category_name,
+            "categories": [Config.to_str(c) for c in self.categories],
+            "keywords": [kw.to_dict() for kw in self.keywords],
+            "channel_id": Config.to_str(self.channel_id),
+            "role": Config.to_str(self.role),
+            "price_ranges_last_updated": self.price_ranges_last_updated,
+            "exclude_keywords": self.exclude_keywords,
+            "blocklist_override": self.blocklist_override,
+            "do_not_show": [deal.id.lower() for deal in self.do_not_show],
+            "is_psu": self.is_psu,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Self:
+        return cls(
+            category_name=data["category_name"],
+            categories=[c for c in [Config.to_int(v) for v in data["categories"]] if c],
+            keywords=[Keyword.from_dict(d) for d in data["keywords"]],
+            channel_id=Config.to_int(str(data["channel_id"])),
+            role=Config.to_int(str(data["role"])),
+            price_ranges_last_updated=data.get(
+                "price_ranges_last_updated",
+                "1970-01-01T00:00:00.000+00:00",
+            ),
+            exclude_keywords=data.get("exclude_keywords", []),
+            blocklist_override=data.get("blocklist_override", []),
+            do_not_show=[Deal.from_str(dt) for dt in data.get("do_not_show", [])],
+            is_psu=data.get("is_psu", False),
+        )
+
 
 @dataclass
 class SleepHours:
     start: str
     end: str
+
+    def to_dict(self) -> dict:
+        return {
+            "start": self.start,
+            "end": self.end,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Self:
+        return cls(start=data["start"], end=data["end"])
 
 
 @dataclass
@@ -157,82 +239,103 @@ class Config:
     config_editor_host: str | None = None
     config_editor_port: int | None = None
 
+    @overload
     @staticmethod
-    def load() -> "Config":  # noqa: C901, PLR0912, PLR0915
-        data: dict = get_parsed_config()
+    def to_str(val: str | int) -> str: ...
 
-        data.pop("$schema", None)
+    @overload
+    @staticmethod
+    def to_str(val: str | int | None) -> str | None: ...
+
+    @staticmethod
+    def to_str(val):
+        if val is None:
+            return None
+        return str(val)
+
+    @overload
+    @staticmethod
+    def to_int(val: str | int) -> int: ...
+
+    @overload
+    @staticmethod
+    def to_int(val: str | int | None) -> int | None: ...
+
+    @staticmethod
+    def to_int(val):
+        if val is None or str(val).lower().strip() == "none":
+            return None
+        if isinstance(val, str):
+            return int(val)
+        if isinstance(val, int):
+            return val
+
+        try:
+            return int(val)
+        except ValueError:
+            return None
+
+    def to_dict(self) -> dict:
+        result = {
+            "debug_mode": self.debug_mode,
+            "discord_py_debug_mode": self.discord_py_debug_mode,
+            "log_api_responses": self.log_api_responses,
+            "file_logging": self.file_logging,
+            "ping_for_warnings": self.ping_for_warnings,
+            "start_on_command": self.start_on_command,
+            "bot_debug_commands": self.bot_debug_commands,
+            "include_shipping_in_deal_evaluation": self.include_shipping_in_deal_evaluation,
+            "include_shipping_in_price_filters": self.include_shipping_in_price_filters,
+            "poll_interval_seconds": self.poll_interval_seconds,
+            "ebay_app_id": self.ebay_app_id,
+            "ebay_cert_id": self.ebay_cert_id,
+            "ebay_dev_id": self.ebay_dev_id,
+            "discord_bot_token": self.discord_bot_token,
+            "discord_guild_id": self.to_str(self.discord_guild_id),
+            "admin_role_id": self.to_str(self.admin_role_id),
+            "seller_blocklist": self.seller_blocklist,
+            "condition_blocklist": self.condition_blocklist,
+            "pings": [ping.to_dict() for ping in self.pings],
+            "self_roles": [group.to_dict() for group in self.self_roles],
+        }
+
+        if self.logger_webhook is not None:
+            result["logger_webhook"] = self.logger_webhook
+        if self.logger_webhook_ping is not None:
+            result["logger_webhook_ping"] = self.to_str(self.logger_webhook_ping)
+        if self.sleep_hours is not None:
+            result["sleep_hours"] = self.sleep_hours.to_dict()
+        if self.config_editor_password is not None:
+            result["config_editor_password"] = self.config_editor_password
+        if self.config_editor_host is not None:
+            result["config_editor_host"] = self.config_editor_host
+        if self.config_editor_port is not None:
+            result["config_editor_port"] = self.config_editor_port
+
+        return result
+
+    def save(self, path: Path | None = None) -> None:
+        if path is None:
+            path = get_config_path()
+
+        with path.open("w", encoding="utf-8") as f:
+            f.write(json5.dumps(self.to_dict(), indent=4))
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Self:
+        data = data.copy()
         data.pop("config_editor", None)
-
-        # The global blocklist is stored in global_blocklist.txt, not in the main config.
-        # Older/buggy editor versions may have written it into the config root.
-        data.pop("blocklist", None)
-        data.pop("global_blocklist", None)
 
         pings_data = data.pop("pings", [])
         self_roles_data = data.pop("self_roles", [])
         sleep_hours_data = data.pop("sleep_hours", None)
-        pings: list[PingConfig] = []
+
+        pings: list[PingConfig] = [PingConfig.from_dict(pd) for pd in pings_data]
         self_roles: list[SelfRoleGroup] = []
         sleep_hours: SleepHours | None = None
 
-        def _to_int(val: str | int) -> int:
-            if isinstance(val, str):
-                return int(val)
-            elif isinstance(val, int):
-                return val
-
-            try:
-                return int(val)
-            except Exception as e:
-                msg = f"Error converting {val} to an int: {e}"
-                raise ValueError(msg) from e
-
-        for ping_data in pings_data:
-            if "channel_id" in ping_data:
-                ping_data["channel_id"] = _to_int(ping_data["channel_id"])
-            if "role" in ping_data:
-                ping_data["role"] = _to_int(ping_data["role"])
-            if "categories" in ping_data and isinstance(ping_data["categories"], list):
-                ping_data["categories"] = [_to_int(c) for c in ping_data["categories"]]
-
-            if ping_data.get("keywords") and isinstance(ping_data["keywords"], list):
-                keywords = []
-                for kw_data in ping_data["keywords"]:
-                    deal_ranges = None
-                    if "deal_ranges" in kw_data:
-                        ranges_data: dict = kw_data.pop("deal_ranges")
-
-                        fire_deal: dict = ranges_data.get("fire_deal", {"start": 0, "end": 0})
-                        great_deal: dict = ranges_data.get("great_deal", {"start": 0, "end": 0})
-                        good_deal: dict = ranges_data.get("good_deal", {"start": 0, "end": 0})
-                        ok_deal: dict = ranges_data.get("ok_deal", {"start": 0, "end": 0})
-                        do_not_show: list[str] = ranges_data.get("do_not_show", [])
-
-                        deal_ranges = DealRanges(
-                            fire_deal=PriceRange(**fire_deal),
-                            great_deal=PriceRange(**great_deal),
-                            good_deal=PriceRange(**good_deal),
-                            ok_deal=PriceRange(**ok_deal),
-                            do_not_show=[getattr(Deal, dns.upper()) for dns in do_not_show],
-                        )
-
-                    keyword = Keyword(deal_ranges=deal_ranges, **kw_data)
-                    keywords.append(keyword)
-                ping_data["keywords"] = keywords
-
-            dns = ping_data.get("do_not_show")
-            if dns:
-                ping_data["do_not_show"] = [getattr(Deal, a.upper()) for a in dns]
-
-            pings.append(PingConfig(**ping_data))
-
         for group_data in self_roles_data:
-            roles = []
-            for role_data in group_data.get("roles", []):
-                if "id" in role_data:
-                    role_data["id"] = _to_int(role_data["id"])
-                roles.append(SelfRole(**role_data))
+            roles = [SelfRole.from_dict(role_data) for role_data in group_data.get("roles", [])]
 
             max_roles = 25
             if len(roles) > max_roles:
@@ -241,11 +344,55 @@ class Config:
             self_roles.append(SelfRoleGroup(title=group_data["title"], roles=roles))
 
         if sleep_hours_data:
-            sleep_hours = SleepHours(**sleep_hours_data)
+            sleep_hours = SleepHours.from_dict(sleep_hours_data)
 
         for key in ["discord_guild_id", "admin_role_id", "logger_webhook_ping"]:
             if key in data:
-                data[key] = _to_int(data[key])
+                data[key] = Config.to_int(data[key])
+
+        return cls(pings=pings, self_roles=self_roles, sleep_hours=sleep_hours, **data)
+
+    @staticmethod
+    def from_json(json_str: str) -> "Config":
+        data = json5.loads(json_str)
+        return Config.from_dict(data)  # pyright: ignore[reportArgumentType]
+
+    def to_json(self) -> str:
+        return json5.dumps(self.to_dict(), indent=4)
+
+    @staticmethod
+    def load() -> "Config":
+        data: dict = get_parsed_config()
+
+        data.pop("$schema", None)
+        data.pop("config_editor", None)
+
+        data.pop("blocklist", None)
+        data.pop("global_blocklist", None)
+
+        pings_data = data.pop("pings", [])
+        self_roles_data = data.pop("self_roles", [])
+        sleep_hours_data = data.pop("sleep_hours", None)
+
+        pings: list[PingConfig] = [PingConfig.from_dict(pd) for pd in pings_data]
+        self_roles: list[SelfRoleGroup] = []
+        sleep_hours: SleepHours | None = None
+
+        for group_data in self_roles_data:
+            roles = [SelfRole.from_dict(rd) for rd in group_data.get("roles", [])]
+
+            max_roles = 25
+            if len(roles) > max_roles:
+                msg = "A self-role group cannot have more than 25 roles due to Discord limitations."
+                raise ValueError(msg)
+            self_roles.append(SelfRoleGroup(title=group_data["title"], roles=roles))
+
+        if sleep_hours_data:
+            sleep_hours = SleepHours.from_dict(sleep_hours_data)
+
+        for key in ["discord_guild_id", "admin_role_id", "logger_webhook_ping"]:
+            if key in data:
+                data[key] = Config.to_int(data[key])
 
         return Config(pings=pings, self_roles=self_roles, sleep_hours=sleep_hours, **data)
 
