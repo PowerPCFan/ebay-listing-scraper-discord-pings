@@ -23,7 +23,7 @@ from .config_tools import (
     reload_global_blocklist,
 )
 from .ebay_api import EbayItem
-from .enums import BuyingOption, ConditionEnum, DealTuple, Emojis, Match
+from .enums import BuyingOption, ConditionEnum, DealTuple, Emojis, KeywordMode, Match
 from .logger import discordPyLevelValue, logger
 from .rolepicker_config_tools import RolePickerRole, RolePickerState
 from .utils import (
@@ -549,9 +549,13 @@ class EbayScraperBot(commands.Bot):
 
             embed.add_field(
                 name=":zap: SPL's PSU Tierlist Matches:",
-                value="*Note: These are potential matches based on the listing details. These may be incorrect, so please verify at https://psutierlist.org.*\n" + "\n".join([
-                    f"- {psu.full_name} ({get_tier_emoji(psu.tier)}Tier **{get_tier_name(psu.tier)}**)" for psu in psus
-                ]),
+                value="*Note: These are potential matches based on the listing details. These may be incorrect, so please verify at https://psutierlist.org.*\n"
+                + "\n".join(
+                    [
+                        f"- {psu.full_name} ({get_tier_emoji(psu.tier)}Tier **{get_tier_name(psu.tier)}**)"
+                        for psu in psus
+                    ]
+                ),
                 inline=False,
             )
 
@@ -567,10 +571,16 @@ class EbayScraperBot(commands.Bot):
         # not sure how to conditionally handle that (you probably can't) so i'm just using '•'
         sep = " • "
 
-        embed.set_footer(
-            text=f'Friendly Name: "{match_object.friendly_name}" {sep} Item ID: {item.item_id}',
-            icon_url="https://raw.githubusercontent.com/PowerPCFan/ebay-listing-scraper-discord-pings/refs/heads/master/static/img/ebay-favicon.png",
-        )
+        if match_object.mode == KeywordMode.QUERY and match_object.query:
+            embed.set_footer(
+                text=f'Query: "{match_object.query}" {sep} Item Name: "{match_object.friendly_name}" {sep} Item ID: {item.item_id}',
+                icon_url="https://raw.githubusercontent.com/PowerPCFan/ebay-listing-scraper-discord-pings/refs/heads/master/static/img/ebay-favicon.png",
+            )
+        else:
+            embed.set_footer(
+                text=f'Item Name: "{match_object.friendly_name}" {sep} Item ID: {item.item_id}',
+                icon_url="https://raw.githubusercontent.com/PowerPCFan/ebay-listing-scraper-discord-pings/refs/heads/master/static/img/ebay-favicon.png",
+            )
 
         if item.main_image:
             embed.set_thumbnail(url=item.main_image)
@@ -780,8 +790,12 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
 
     @bot.tree.command(name="reload-config", description="Reload the script's config.json file")
     @commands.is_owner()
-    async def reload_config_command(interaction: discord.Interaction, ephemeral: bool = True) -> None:
+    async def reload_config_command(
+        interaction: discord.Interaction, ephemeral: bool = True
+    ) -> None:
         try:
+            await interaction.response.defer(ephemeral=ephemeral)
+
             gv.config = reload_config()
 
             embed = discord.Embed(
@@ -790,10 +804,9 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
                 color=discord.Color.green(),
                 timestamp=discord.utils.utcnow(),
             )
-            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+            await interaction.followup.send(embed=embed, ephemeral=ephemeral)
 
             logger.info("Configuration reloaded via /reload-config command")
-
         except Exception as e:
             embed = discord.Embed(
                 title="Configuration Reload Failed",
@@ -801,7 +814,7 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
                 color=discord.Color.red(),
                 timestamp=discord.utils.utcnow(),
             )
-            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+            await interaction.followup.send(embed=embed, ephemeral=ephemeral)
             logger.error(f"Failed to reload config via Discord: {e}")
 
     @bot.tree.command(
@@ -824,7 +837,6 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
 
             await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
             logger.info("Global blocklist reloaded via /reload-global-blocklist command")
-
         except Exception as e:
             embed = discord.Embed(
                 title="Global Blocklist Reload Failed",
@@ -930,21 +942,27 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
         description="Estimate the number of eBay API calls made per day based on current config",
     )
     @commands.is_owner()
-    async def estimate_daily_api_calls_command(
+    async def estimate_daily_api_calls_command(  # noqa: C901, PLR0912, PLR0915
         interaction: discord.Interaction, ephemeral: bool = False
     ) -> None:
         try:
-            all_categories = set()
-            for ping in gv.config.pings:
-                all_categories.update(ping.categories)
+            all_poll_categories = set()
+            query_search_calls_per_poll = 0
 
-            unique_categories = len(all_categories)
+            for ping in gv.config.pings:
+                for item in ping.items:
+                    mode = item.keyword.mode.value
+                    if mode == "poll":
+                        all_poll_categories.update(ping.categories)
+                    elif mode == "query":
+                        query_search_calls_per_poll += len(ping.categories)
+
+            poll_summary_calls_per_poll = len(all_poll_categories)
             poll_interval_seconds = gv.config.poll_interval_seconds
 
             seconds_per_day = 24 * 60 * 60
 
             active_seconds_per_day = seconds_per_day
-            sleep_hours_info = ""
 
             if gv.config.sleep_hours:
                 try:
@@ -979,29 +997,63 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
                         sleep_duration = sleep_timedelta.total_seconds()
 
                     active_seconds_per_day = seconds_per_day - sleep_duration
-                    sleep_hours_duration = sleep_duration / 3600
-                    sleep_hours_info = f"\n- **Sleep hours:** {sleep_hours_duration:.1f}h ({gv.config.sleep_hours.start[:-6]} to {gv.config.sleep_hours.end[:-6]} - UTC Offset {gv.config.sleep_hours.start[-6:]})"
                 except Exception:
-                    logger.warning("Failed to parse sleep hours for API call estimation. Ignoring sleep hours in calculation.")
+                    logger.warning(
+                        "Failed to parse sleep hours for API call estimation. Ignoring sleep hours in calculation."
+                    )
 
             polls_per_day = active_seconds_per_day / poll_interval_seconds
-            api_calls_per_day = polls_per_day * unique_categories
+            poll_summary_calls_per_day = polls_per_day * poll_summary_calls_per_poll
+            query_search_calls_per_day = polls_per_day * query_search_calls_per_poll
+            api_calls_per_day = poll_summary_calls_per_day + query_search_calls_per_day
 
             minutes_between_polls = poll_interval_seconds / 60
-            # hours_between_polls = poll_interval_seconds / 3600
             active_hours_per_day = active_seconds_per_day / 3600
+            sleep_display = "Disabled"
+            if gv.config.sleep_hours:
+                sleep_display = (
+                    f"{gv.config.sleep_hours.start[:-6]} to {gv.config.sleep_hours.end[:-6]} "
+                    f"(UTC {gv.config.sleep_hours.start[-6:]})"
+                )
 
             embed = discord.Embed(
-                title="Stats",
+                title="API Call Estimates",
                 color=discord.Color.blurple(),
                 timestamp=discord.utils.utcnow(),
-                description=(
-                    f"- **Active hours per day:** {active_hours_per_day:.1f}h{sleep_hours_info}\n"
-                    f"- **Polls per day:** {polls_per_day:.1f}\n"
-                    f"- **Minutes between polls:** {minutes_between_polls:.1f}\n"
-                    f"- **API calls per poll:** {unique_categories}\n"
-                    f"- **API calls per day:** {api_calls_per_day:.0f}"
+            )
+            embed.add_field(
+                name="General",
+                value=(
+                    f"- Active hours/day: **{active_hours_per_day:.1f}h**\n"
+                    f"- Sleep hours: **{sleep_display}**\n"
+                    f"- Minutes between polls: **{minutes_between_polls:.1f}**\n"
+                    f"- Polls/day: **{polls_per_day:.1f}**"
                 ),
+                inline=False,
+            )
+            embed.add_field(
+                name="Poll Mode",
+                value=(
+                    f"- Summary calls/poll: **{poll_summary_calls_per_poll}**\n"
+                    f"- Summary calls/day: **{poll_summary_calls_per_day:.0f}**"
+                ),
+                inline=True,
+            )
+            embed.add_field(
+                name="Query Mode",
+                value=(
+                    f"- Query calls/poll: **{query_search_calls_per_poll}**\n"
+                    f"- Query calls/day: **{query_search_calls_per_day:.0f}**"
+                ),
+                inline=True,
+            )
+            embed.add_field(
+                name="Total",
+                value=(
+                    f"- API calls/poll: **{poll_summary_calls_per_poll + query_search_calls_per_poll}**\n"
+                    f"- API calls/day: **{api_calls_per_day:.0f}**"
+                ),
+                inline=False,
             )
 
             rate_limit = 5000
@@ -1047,37 +1099,13 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
             embed=discord.Embed(title="Pong!", description=f"Delay: {round(bot.latency * 1000)}ms")
         )
 
-    # @bot.tree.command(name='view-config', description="Send the contents of the bot's config.json")
-    # @commands.is_owner()
-    # async def view_config_command(interaction: discord.Interaction):
-    #     try:
-    #         file = discord.File(
-    #             io.BytesIO(config_tools.get_raw_config().encode('utf-8')),
-    #             filename="summary.txt"
-    #         )
-
-    #         await interaction.response.send_message(
-    #             content="This file contains sensitive information. Do not share it!",
-    #             file=file,
-    #             ephemeral=True
-    #         )
-
-    #     except Exception as e:
-    #         await interaction.response.send_message(
-    #             embed=discord.Embed(
-    #                 title="Error",
-    #                 description=f"Error retrieving config: {type(e).__name__}",
-    #                 color=discord.Color.red(),
-    #                 timestamp=discord.utils.utcnow()
-    #             ),
-    #             ephemeral=True
-    #         )
-
     @bot.tree.command(
         name="config-summary", description="Send a summary of the current bot configuration"
     )
     @commands.is_owner()
-    async def config_summary_command(interaction: discord.Interaction, ephemeral: bool = True) -> None:
+    async def config_summary_command(
+        interaction: discord.Interaction, ephemeral: bool = True
+    ) -> None:
         try:
             embed = discord.Embed(title="Config Summary", color=discord.Color.blurple())
 
@@ -1292,7 +1320,9 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
 
         for picker_id in old_picker_ids:
             try:
-                old_message = await cast("discord.TextChannel", interaction.channel).fetch_message(picker_id)
+                old_message = await cast("discord.TextChannel", interaction.channel).fetch_message(
+                    picker_id
+                )
                 await old_message.delete()
                 logger.info(f"Deleted old self role picker message with ID {picker_id}")
             except Exception:

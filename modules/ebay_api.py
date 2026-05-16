@@ -63,11 +63,10 @@ async def close_http_client() -> None:
         _http_client = None
 
 
-def _get_response_json_filename() -> Path:
+def _get_response_json_filename(api_source: str) -> Path:
     if datetime is None:
         raise RuntimeError(json_datetime_alert)
-
-    directory = Path(__file__).parent.parent / "responses"
+    directory = Path(__file__).parent.parent / "responses" / (("".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in api_source).strip("-")) or "unknown")  # noqa: E501
     path = directory / f"response-{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
 
     directory.mkdir(exist_ok=True, parents=True)
@@ -336,40 +335,44 @@ async def initialize() -> bool:
     return True
 
 
-async def search_single_category(category_id: str, price_filter: str = "") -> list[dict[str, Any]]:
-    try:
+def _get_browse_headers(token: str) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {token}",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+
+def _log_response_json(response: httpx.Response, api_source: str) -> None:
+    if not gv.config.log_api_responses:
+        return
+    if not json:
+        raise RuntimeError(json_datetime_alert)
+
+    parsed = response.json()
+    with _get_response_json_filename(api_source).open(mode="w", encoding="utf-8") as f:
+        logger.debug("Writing response to file for debugging purposes...")
+        json.dump(parsed, f, indent=4, ensure_ascii=False)
+        logger.debug("Done.")
+
+
+class EbayBrowseSummaryApi:
+    def __init__(self, source_name: str) -> None:
+        self.source_name = source_name
+
+    async def search(self, params: dict[str, str], error_context: str) -> list[dict[str, Any]]:
         token = await get_valid_token()
 
         if not token:
-            logger.error(f"Failed to get OAuth token for category {category_id}")
+            logger.error(f"Failed to get OAuth token for {error_context}")
             return []
-
-        params = {
-            "category_ids": category_id,
-            "filter": "buyingOptions:{FIXED_PRICE|AUCTION}" + price_filter,
-            "sort": "newlyListed",
-            "limit": str(gv.limit),
-        }
-
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
 
         gv.api_call_count += 1
         client = await get_http_client()
-        response = await client.get(api_url, params=params, headers=headers)
+        response = await client.get(api_url, params=params, headers=_get_browse_headers(token))
 
-        if gv.config.log_api_responses:
-            if not json:
-                raise RuntimeError(json_datetime_alert)  # noqa: TRY301
-            parsed = response.json()
-            with _get_response_json_filename().open(mode="w", encoding="utf-8") as f:
-                logger.debug("Writing response to file for debugging purposes...")
-                json.dump(parsed, f, indent=4, ensure_ascii=False)
-                logger.debug("Done.")
+        _log_response_json(response, self.source_name)
 
         if response.status_code in (401, 403):
             global _token_cache, _token_expires_at  # noqa: PLW0603
@@ -378,7 +381,7 @@ async def search_single_category(category_id: str, price_filter: str = "") -> li
             return []
 
         if response.status_code != 200:  # noqa: PLR2004
-            logger.error(f"eBay API error for category {category_id}: {response.status_code}")
+            logger.error(f"eBay API error for {error_context}: {response.status_code}")
             return []
 
         data = dict(response.json())
@@ -387,6 +390,58 @@ async def search_single_category(category_id: str, price_filter: str = "") -> li
 
         return list(data["itemSummaries"])
 
+
+summary_category_api = EbayBrowseSummaryApi(source_name="browse_item_summary_category_poll")
+summary_query_api = EbayBrowseSummaryApi(source_name="browse_item_summary_keyword_query")
+
+
+def _build_summary_params(
+    *,
+    price_filter: str = "",
+    category_id: str | None = None,
+    query: str | None = None,
+) -> dict[str, str]:
+    params = {
+        "filter": "buyingOptions:{FIXED_PRICE|AUCTION}" + price_filter,
+        "sort": "newlyListed",
+        "limit": str(gv.limit),
+    }
+    if category_id:
+        params["category_ids"] = category_id
+    if query:
+        params["q"] = query
+    return params
+
+
+async def search_single_category(category_id: str, price_filter: str = "") -> list[dict[str, Any]]:
+    try:
+        params = _build_summary_params(price_filter=price_filter, category_id=category_id)
+        return await summary_category_api.search(
+            params=params,
+            error_context=f"category {category_id}",
+        )
+
     except Exception:
         logger.exception(f"Error searching category {category_id}:")
+        return []
+
+
+async def search_query_in_category(
+    *,
+    category_id: str,
+    query: str,
+    price_filter: str = "",
+) -> list[dict[str, Any]]:
+    try:
+        params = _build_summary_params(
+            price_filter=price_filter,
+            category_id=category_id,
+            query=query,
+        )
+        return await summary_query_api.search(
+            params=params,
+            error_context=f"query '{query}' in category {category_id}",
+        )
+    except Exception:
+        logger.exception(f"Error querying category {category_id}:")
         return []

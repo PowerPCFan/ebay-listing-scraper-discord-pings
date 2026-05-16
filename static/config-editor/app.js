@@ -151,6 +151,44 @@
     return string;
   }
 
+  function ensureItemKeywordConfig(item) {
+    if (!item || typeof item !== "object") return { mode: "poll", filter: "", query: null };
+    let repaired = false;
+    const repairReasons = [];
+    if (!item.keyword || typeof item.keyword !== "object") {
+      item.keyword = { mode: "poll", filter: "", query: null };
+      repaired = true;
+      repairReasons.push("missing keyword object");
+    }
+    const hasQueryText = typeof item.keyword.query === "string" && item.keyword.query.trim() !== "";
+    const modeValue = String(item.keyword.mode || "").trim().toLowerCase();
+    if (modeValue === "poll" || modeValue === "query") {
+      item.keyword.mode = modeValue;
+    } else if (!modeValue) {
+      item.keyword.mode = hasQueryText ? "query" : "poll";
+      repaired = true;
+      repairReasons.push("empty mode");
+    } else {
+      item.keyword.mode = hasQueryText ? "query" : "poll";
+      repaired = true;
+      repairReasons.push(`invalid mode '${item.keyword.mode}'`);
+    }
+    if (typeof item.keyword.filter !== "string") {
+      item.keyword.filter = "";
+      repaired = true;
+      repairReasons.push("non-string filter");
+    }
+    if (typeof item.keyword.query !== "string" && item.keyword.query !== null) {
+      item.keyword.query = null;
+      repaired = true;
+      repairReasons.push("invalid query");
+    }
+    if (repaired) {
+      console.log("[normalize] ensureItemKeywordConfig:", repairReasons.join(", "));
+    }
+    return item.keyword;
+  }
+
   function setStatus(text, kind = "") {
     statusEl.textContent = text;
     statusEl.className = `status-chip ${kind}`.trim();
@@ -171,8 +209,15 @@
 
   function updatePingSaveButtonState() {
     const hasPings = !!state && Array.isArray(state.pings) && state.pings.length > 0;
-    btnSavePingEl.disabled = !hasPings || !hasPendingPingChanges;
-    btnSavePingEl.textContent = hasPendingPingChanges ? "Save Ping Changes" : "All Changes Saved";
+    const hasValidationErrors = hasPings && selectedPingIndex >= 0
+      ? validatePingForSave(state.pings[selectedPingIndex], selectedPingIndex).length > 0
+      : false;
+    btnSavePingEl.disabled = !hasPings || !hasPendingPingChanges || hasValidationErrors;
+    if (hasValidationErrors) {
+      btnSavePingEl.textContent = "Fix Validation Errors";
+    } else {
+      btnSavePingEl.textContent = hasPendingPingChanges ? "Save Ping Changes" : "All Changes Saved";
+    }
 
     if (pingSaveDockEl) {
       pingSaveDockEl.classList.toggle("visible", hasPendingPingChanges);
@@ -449,8 +494,8 @@
     const originalPing = originalState?.pings?.[selectedPingIndex];
     if (!currentPing || !originalPing || typeof currentPing !== "object") return;
 
-    const currentKeywords = Array.isArray(currentPing.keywords) ? currentPing.keywords : [];
-    const originalKeywords = Array.isArray(originalPing.keywords) ? originalPing.keywords : [];
+    const currentKeywords = Array.isArray(currentPing.items) ? currentPing.items : [];
+    const originalKeywords = Array.isArray(originalPing.items) ? originalPing.items : [];
 
     let shouldTouch = currentKeywords.length !== originalKeywords.length;
 
@@ -544,12 +589,134 @@
   }
 
   function buildConfigPayloadForSave() {
-    // `state` includes UI-only data (global blocklist) that must not be written into config.jsonc.
     const payload = JSON.parse(JSON.stringify(state || {}));
+    if (Array.isArray(payload.pings)) {
+      payload.pings.forEach((ping) => {
+        if (!ping || !Array.isArray(ping.items)) return;
+        ping.items.forEach((item) => {
+          if (!item || typeof item !== "object") return;
+          if (!item.keyword || typeof item.keyword !== "object") {
+            item.keyword = { mode: "poll", filter: "", query: null };
+          }
+          const queryText = typeof item.keyword.query === "string" ? item.keyword.query.trim() : "";
+          const modeValue = String(item.keyword.mode || "").trim().toLowerCase();
+          if (!modeValue) {
+            item.keyword.mode = queryText ? "query" : "poll";
+          } else if (modeValue !== "poll" && modeValue !== "query") {
+            item.keyword.mode = queryText ? "query" : "poll";
+          } else {
+            item.keyword.mode = modeValue;
+          }
+        });
+      });
+    }
     delete payload.blocklist;
     delete payload.global_blocklist;
     delete payload.editor_metadata;
     return payload;
+  }
+
+  function buildLcsDiff(beforeLines, afterLines) {
+    const n = beforeLines.length;
+    const m = afterLines.length;
+    const dp = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
+
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        if (beforeLines[i] === afterLines[j]) {
+          dp[i][j] = dp[i + 1][j + 1] + 1;
+        } else {
+          dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+        }
+      }
+    }
+
+    const out = [];
+    let i = 0;
+    let j = 0;
+    while (i < n && j < m) {
+      if (beforeLines[i] === afterLines[j]) {
+        out.push({ type: "ctx", left: i + 1, right: j + 1, text: beforeLines[i] });
+        i += 1;
+        j += 1;
+      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+        out.push({ type: "del", left: i + 1, right: null, text: beforeLines[i] });
+        i += 1;
+      } else {
+        out.push({ type: "add", left: null, right: j + 1, text: afterLines[j] });
+        j += 1;
+      }
+    }
+    while (i < n) {
+      out.push({ type: "del", left: i + 1, right: null, text: beforeLines[i] });
+      i += 1;
+    }
+    while (j < m) {
+      out.push({ type: "add", left: null, right: j + 1, text: afterLines[j] });
+      j += 1;
+    }
+    return out;
+  }
+
+  function buildContextDiffHtml(beforeObj, afterObj, contextLines = 2) {
+    const before = JSON.stringify(beforeObj, null, 2).split("\n");
+    const after = JSON.stringify(afterObj, null, 2).split("\n");
+    const diff = buildLcsDiff(before, after);
+    const changedIndexes = [];
+    diff.forEach((line, index) => {
+      if (line.type !== "ctx") changedIndexes.push(index);
+    });
+
+    if (changedIndexes.length === 0) {
+      return '<span class="save-diff-line ctx">No JSON changes detected.</span>';
+    }
+
+    const keep = new Set();
+    changedIndexes.forEach((idx) => {
+      for (let i = Math.max(0, idx - contextLines); i <= Math.min(diff.length - 1, idx + contextLines); i++) {
+        keep.add(i);
+      }
+    });
+
+    const rendered = [];
+    let inHunk = false;
+    for (let idx = 0; idx < diff.length; idx++) {
+      if (!keep.has(idx)) {
+        inHunk = false;
+        continue;
+      }
+      if (!inHunk) {
+        const line = diff[idx];
+        const left = line.left || 0;
+        const right = line.right || 0;
+        rendered.push(`<span class="save-diff-line hunk">@@ -${left}, +${right} @@</span>`);
+        inHunk = true;
+      }
+      const line = diff[idx];
+      const prefix = line.type === "add" ? "+" : line.type === "del" ? "-" : " ";
+      rendered.push(
+        `<span class="save-diff-line ${line.type}">${prefix} ${escapeHtml(line.text)}</span>`
+      );
+    }
+
+    return rendered.join("\n");
+  }
+
+  function openSaveDiffDialog(payload) {
+    const beforePayload = JSON.parse(JSON.stringify(originalState || {}));
+    delete beforePayload.blocklist;
+    delete beforePayload.global_blocklist;
+    delete beforePayload.editor_metadata;
+    saveDiffPreEl.innerHTML = buildContextDiffHtml(beforePayload, payload.parsed || {});
+    pendingSavePayload = payload;
+    saveDiffOverlayEl.classList.add("open");
+    saveDiffOverlayEl.setAttribute("aria-hidden", "false");
+  }
+
+  function closeSaveDiffDialog() {
+    saveDiffOverlayEl.classList.remove("open");
+    saveDiffOverlayEl.setAttribute("aria-hidden", "true");
+    pendingSavePayload = null;
   }
 
   function send(payload) {
@@ -602,21 +769,28 @@
   const autoGenerateModalEl = document.getElementById("autoGenerateModal");
   const autoComponentTypeEl = document.getElementById("autoComponentType");
   const autoComponentFieldsGridEl = document.getElementById("autoComponentFieldsGrid");
-  const autoFriendlyNameEl = document.getElementById("autoFriendlyName");
   const autoMinPriceEl = document.getElementById("autoMinPrice");
   const autoTargetPriceEl = document.getElementById("autoTargetPrice");
   const autoMaxPriceEl = document.getElementById("autoMaxPrice");
-  const autoKeywordEl = document.getElementById("autoKeyword");
   const btnAutoGenerateCancelEl = document.getElementById("btnAutoGenerateCancel");
   const btnAutoGenerateApplyEl = document.getElementById("btnAutoGenerateApply");
+  const filterGenerateOverlayEl = document.getElementById("filterGenerateOverlay");
+  const filterComponentTypeEl = document.getElementById("filterComponentType");
+  const filterComponentFieldsGridEl = document.getElementById("filterComponentFieldsGrid");
+  const btnFilterGenerateCancelEl = document.getElementById("btnFilterGenerateCancel");
+  const btnFilterGenerateApplyEl = document.getElementById("btnFilterGenerateApply");
+  const saveDiffOverlayEl = document.getElementById("saveDiffOverlay");
+  const saveDiffPreEl = document.getElementById("saveDiffPre");
+  const btnSaveDiffCancelEl = document.getElementById("btnSaveDiffCancel");
+  const btnSaveDiffConfirmEl = document.getElementById("btnSaveDiffConfirm");
 
   let arrayResolver = null;
   let currentArrayList = [];
   let currentArrayIsNumeric = false;
   let currentKeywordIndex = null;
+  let pendingSavePayload = null;
   let ebayCategories = [];
-  let autoFriendlyNameManuallyEdited = false;
-  let autoGenerateContext = { conversion_mode: false };
+  let autoGenerateContext = { conversion_mode: false, item_mode: "poll" };
 
   const AUTO_COMPONENT_TYPES = [
     { value: "nvidia_gpu", label: "NVIDIA GPU" },
@@ -738,11 +912,7 @@
   }
 
   function setAutoKeywordReadonlyByType(componentType) {
-    const isCustom = componentType === "custom";
-    autoKeywordEl.readOnly = !isCustom;
-    autoKeywordEl.placeholder = isCustom
-      ? "Enter custom keyword or regex"
-      : "Generated from selected component type";
+    return componentType === "custom";
   }
 
   function getSuggestedMinPrice(targetPriceRaw) {
@@ -926,7 +1096,7 @@
       hintWrap.className = "field full";
       const hint = document.createElement("p");
       hint.className = "hint";
-      hint.textContent = "Custom mode keeps the keyword field editable.";
+      hint.textContent = "Custom mode keeps the filter field editable.";
       hintWrap.appendChild(hint);
       autoComponentFieldsGridEl.appendChild(hintWrap);
     }
@@ -1065,25 +1235,97 @@
   }
 
   function updateAutoGeneratedKeywordPreview() {
-    if (!autoComponentTypeEl) return;
-    const componentType = autoComponentTypeEl.value;
-    setAutoKeywordReadonlyByType(componentType);
-    if (componentType === "custom") return;
+    return;
+  }
 
-    const generated = generateKeywordFromComponent(componentType, autoComponentState[componentType]);
-    if (!generated.error) {
-      autoKeywordEl.value = generated.keyword || "";
-    } else if (!autoKeywordEl.value.trim()) {
-      autoKeywordEl.value = "";
-    }
+  function ensureFilterComponentTypeOptions() {
+    if (!filterComponentTypeEl || filterComponentTypeEl.options.length > 0) return;
+    AUTO_COMPONENT_TYPES.filter(component => component.value !== "custom").forEach((component) => {
+      const option = document.createElement("option");
+      option.value = component.value;
+      option.textContent = component.label;
+      filterComponentTypeEl.appendChild(option);
+    });
+  }
 
-    if (!autoFriendlyNameManuallyEdited && generated.friendlyName) {
-      autoFriendlyNameEl.value = generated.friendlyName;
-      autoFriendlyNameEl.placeholder = generated.friendlyName;
-    } else if (!autoFriendlyNameEl.value.trim() && generated.friendlyName) {
-      autoFriendlyNameEl.placeholder = generated.friendlyName;
-    } else {
-      autoFriendlyNameEl.placeholder = "Leave blank to auto-fill";
+  function renderFilterComponentFields() {
+    if (!filterComponentTypeEl || !filterComponentFieldsGridEl) return;
+    const componentType = filterComponentTypeEl.value;
+    const values = autoComponentState[componentType] || {};
+    filterComponentFieldsGridEl.innerHTML = "";
+    const addInput = (labelText, key, type = "text", cls = "third", options = null, placeholder = "") => {
+      const wrapper = document.createElement("div");
+      wrapper.className = `field ${cls}`;
+      const label = document.createElement("label");
+      label.textContent = labelText;
+      wrapper.appendChild(label);
+      let input;
+      if (type === "select") {
+        input = document.createElement("select");
+        options.forEach((opt) => {
+          const option = document.createElement("option");
+          if (typeof opt === "string") {
+            option.value = opt;
+            option.textContent = opt;
+          } else {
+            option.value = opt.value;
+            option.textContent = opt.label;
+          }
+          input.appendChild(option);
+        });
+      } else {
+        input = document.createElement("input");
+        input.type = type;
+        if (placeholder) input.placeholder = placeholder;
+      }
+      input.value = values[key] ?? "";
+      const eventName = type === "select" ? "change" : "input";
+      input.addEventListener(eventName, () => {
+        values[key] = input.value;
+        autoComponentState[componentType] = values;
+        if (key === "variant" || key === "capacity_mode") {
+          renderFilterComponentFields();
+        }
+      });
+      wrapper.appendChild(input);
+      filterComponentFieldsGridEl.appendChild(wrapper);
+    };
+
+    if (componentType === "nvidia_gpu") {
+      addInput("GPU Brand", "brand", "select", "third", ["RTX", "GTX"]);
+      addInput("Model", "model", "text", "third", null, "e.g., 5070");
+      addInput("Variant", "variant", "select", "third", [
+        { value: "normal", label: "Normal" },
+        { value: "ti", label: "Ti" },
+        { value: "super", label: "SUPER" },
+        { value: "ti_super", label: "Ti SUPER" },
+      ]);
+    } else if (componentType === "amd_gpu") {
+      addInput("Model", "model", "text", "half", null, "e.g., 9070");
+      addInput("Variant", "variant", "select", "half", [
+        { value: "normal", label: "Normal" },
+        { value: "xt", label: "XT" },
+        { value: "xtx", label: "XTX" },
+      ]);
+    } else if (componentType === "amd_cpu") {
+      addInput("Ryzen Series", "ryzen", "select", "third", ["3", "5", "7", "9"]);
+      addInput("Model", "model", "text", "third", null, "e.g., 7800");
+    } else if (componentType === "ram") {
+      addInput("Capacity (GB)", "capacity", "number", "third");
+      addInput("DDR Type", "ddr", "text", "third", null, "DDR5");
+      addInput("Speed (MHz)", "speed", "number", "third");
+    } else if (componentType === "nvme_ssd") {
+      addInput("Capacity Mode", "capacity_mode", "select", "third", [
+        { value: "gb", label: "GB only" },
+        { value: "tb", label: "TB only" },
+        { value: "gb_tb", label: "GB or TB" },
+      ]);
+      if (values.capacity_mode === "gb" || values.capacity_mode === "gb_tb") {
+        addInput("GB Value / Regex", "gb", "text", "third", null, "e.g., 512");
+      }
+      if (values.capacity_mode === "tb" || values.capacity_mode === "gb_tb") {
+        addInput("TB Value / Regex", "tb", "text", "third", null, "e.g., 1");
+      }
     }
   }
 
@@ -1091,37 +1333,36 @@
     ensureAutoComponentTypeOptions();
     autoGenerateContext = {
       conversion_mode: !!options.conversion_mode,
+      item_mode: "poll",
     };
     if (autoGenerateTitleEl) {
-      autoGenerateTitleEl.textContent = autoGenerateContext.conversion_mode
-        ? "Configure Auto Mode"
-        : "Update Typed Keyword";
+      autoGenerateTitleEl.textContent = "Generate Deal Ranges";
     }
     currentKeywordIndex = keywordIndex;
     
     // Pre-fill with current keyword values if available
     const ping = state.pings[selectedPingIndex];
-    const keyword = ping.keywords[keywordIndex];
+    const item = ping.items[keywordIndex];
     const keywordMeta = getKeywordMeta(selectedPingIndex, keywordIndex);
+    const itemKeyword = ensureItemKeywordConfig(item);
+    autoGenerateContext.item_mode = itemKeyword.mode || "poll";
     
-    autoFriendlyNameEl.value = keyword.friendly_name || "";
-    autoFriendlyNameManuallyEdited = autoFriendlyNameEl.value.trim() !== "";
-    autoMinPriceEl.value = keyword.min_price !== null ? keyword.min_price : "";
-    autoTargetPriceEl.value = keyword.target_price !== null ? keyword.target_price : "";
-    autoMaxPriceEl.value = keyword.max_price !== null ? keyword.max_price : "";
-    autoComponentState.nvidia_gpu.brand = String(keyword.keyword || "").toUpperCase().includes("GTX") ? "GTX" : "RTX";
+    autoMinPriceEl.value = item.min_price !== null ? item.min_price : "";
+    autoTargetPriceEl.value = item.target_price !== null ? item.target_price : "";
+    autoMaxPriceEl.value = item.max_price !== null ? item.max_price : "";
+    autoComponentState.nvidia_gpu.brand = String(itemKeyword.filter || "").toUpperCase().includes("GTX") ? "GTX" : "RTX";
     if (autoComponentTypeEl) {
-      autoComponentTypeEl.value = options.force_component_type || inferComponentTypeFromKeyword(keyword.keyword || "");
+      autoComponentTypeEl.value = options.force_component_type || inferComponentTypeFromKeyword(itemKeyword.filter || "") || "custom";
     }
     if (autoComponentTypeEl) {
-      const prefillType = autoComponentTypeEl.value;
+      const prefillType = autoComponentTypeEl.value || "custom";
       let prefillData = null;
       if (options.prefill_component_data && typeof options.prefill_component_data === "object") {
         prefillData = cloneJson(options.prefill_component_data);
       } else if (keywordMeta.mode === "typed" && keywordMeta.component_type === prefillType && keywordMeta.component_data) {
         prefillData = cloneJson(keywordMeta.component_data);
       } else if (prefillType !== "custom") {
-        prefillData = reverseParseComponentData(keyword, prefillType);
+        prefillData = reverseParseComponentData(item, prefillType);
       }
 
       autoComponentState[prefillType] = {
@@ -1129,8 +1370,6 @@
         ...(prefillData || {}),
       };
     }
-    autoKeywordEl.value = keyword.keyword || "";
-    setAutoKeywordReadonlyByType(autoComponentTypeEl ? autoComponentTypeEl.value : "custom");
     renderAutoComponentFields();
     
     // Calculate and display suggested min price
@@ -1140,13 +1379,77 @@
     
     autoGenerateOverlayEl.classList.add("open");
     autoGenerateOverlayEl.setAttribute("aria-hidden", "false");
-    autoFriendlyNameEl.focus();
+    autoTargetPriceEl.focus();
   }
 
   function closeAutoGenerateModal() {
     autoGenerateOverlayEl.classList.remove("open");
     autoGenerateOverlayEl.setAttribute("aria-hidden", "true");
     currentKeywordIndex = null;
+  }
+
+  function openFilterGenerateModal(keywordIndex, options = {}) {
+    ensureFilterComponentTypeOptions();
+    currentKeywordIndex = keywordIndex;
+    const ping = state.pings[selectedPingIndex];
+    const item = ping.items[keywordIndex];
+    const keywordMeta = getKeywordMeta(selectedPingIndex, keywordIndex);
+    const itemKeyword = ensureItemKeywordConfig(item);
+    filterComponentTypeEl.value = options.force_component_type || inferComponentTypeFromKeyword(itemKeyword.filter || "") || "nvidia_gpu";
+    const prefillType = filterComponentTypeEl.value || "nvidia_gpu";
+    let prefillData = null;
+    if (options.prefill_component_data && typeof options.prefill_component_data === "object") {
+      prefillData = cloneJson(options.prefill_component_data);
+    } else if (keywordMeta.mode === "typed" && keywordMeta.component_type === prefillType && keywordMeta.component_data) {
+      prefillData = cloneJson(keywordMeta.component_data);
+    } else if (prefillType && prefillType !== "custom") {
+      prefillData = reverseParseComponentData(item, prefillType);
+    }
+    autoComponentState[prefillType] = {
+      ...getDefaultComponentData(prefillType),
+      ...(prefillData || {}),
+    };
+    renderFilterComponentFields();
+    filterGenerateOverlayEl.classList.add("open");
+    filterGenerateOverlayEl.setAttribute("aria-hidden", "false");
+    filterComponentTypeEl.focus();
+  }
+
+  function closeFilterGenerateModal() {
+    filterGenerateOverlayEl.classList.remove("open");
+    filterGenerateOverlayEl.setAttribute("aria-hidden", "true");
+    currentKeywordIndex = null;
+  }
+
+  function applyFilterGeneratedKeyword() {
+    const componentType = filterComponentTypeEl ? filterComponentTypeEl.value : "custom";
+    const generated = generateKeywordFromComponent(
+      componentType,
+      autoComponentState[componentType],
+      "",
+      "",
+    );
+    if (generated.error) {
+      setStatus(generated.error, "error");
+      return;
+    }
+    const keywordFilter = (generated.keyword || "").trim();
+    if (!keywordFilter) {
+      setStatus("Please provide enough data to generate a filter regex.", "error");
+      return;
+    }
+    const ping = state.pings[selectedPingIndex];
+    const kw = ping.items[currentKeywordIndex];
+    const kwKeyword = ensureItemKeywordConfig(kw);
+    const keywordMeta = getKeywordMeta(selectedPingIndex, currentKeywordIndex);
+    kwKeyword.filter = keywordFilter;
+    keywordMeta.mode = "typed";
+    keywordMeta.component_type = componentType;
+    keywordMeta.component_data = cloneJson(autoComponentState[componentType] || {});
+    closeFilterGenerateModal();
+    renderKeywords(ping);
+    markPingChanged();
+    setStatus("Filter applied from Filter Generator.", "ok");
   }
 
   function openCategorySelector(selectedIds, onChange) {
@@ -1378,8 +1681,8 @@
     const generated = generateKeywordFromComponent(
       componentType,
       autoComponentState[componentType],
-      autoKeywordEl.value,
-      autoFriendlyNameEl.value,
+      "",
+      "",
     );
     if (generated.error) {
       setStatus(generated.error, "error");
@@ -1392,26 +1695,23 @@
     const maxInputValue = autoMaxPriceEl.value.trim();
     const minPrice = minInputValue === "" ? suggestedMinPrice : (parseInt(minInputValue, 10) || 0);
     const maxPriceOverride = maxInputValue === "" ? null : (parseInt(maxInputValue, 10) || 0);
-    const friendlyName = autoFriendlyNameEl.value.trim() || generated.friendlyName || "Auto-Generated";
-    const keyword = (componentType === "custom" ? autoKeywordEl.value : generated.keyword || "").trim();
 
     if (targetPrice <= 0) {
       setStatus("Please enter a valid target price", "error");
       return;
     }
-    if (!keyword) {
-      setStatus("Please provide enough data to generate a keyword regex.", "error");
-      return;
-    }
 
-    if (currentKeywordIndex === null || currentKeywordIndex >= state.pings[selectedPingIndex].keywords.length) {
+    if (currentKeywordIndex === null || currentKeywordIndex >= state.pings[selectedPingIndex].items.length) {
       setStatus("Invalid keyword index", "error");
       return;
     }
 
     // Update the keyword
     const ping = state.pings[selectedPingIndex];
-    const kw = ping.keywords[currentKeywordIndex];
+    const kw = ping.items[currentKeywordIndex];
+    const kwKeyword = ensureItemKeywordConfig(kw);
+    const originalMode = autoGenerateContext.item_mode || kwKeyword.mode;
+    const originalQuery = kwKeyword.query;
     const keywordMeta = getKeywordMeta(selectedPingIndex, currentKeywordIndex);
     const preserveExistingRanges = !!(
       autoGenerateContext.conversion_mode &&
@@ -1424,9 +1724,11 @@
     const ranges = preserveExistingRanges
       ? null
       : calculateDealRanges(Math.max(0, minPrice), targetPrice, componentType, maxPriceOverride);
-    
-    kw.friendly_name = friendlyName;
-    kw.keyword = keyword;
+
+    kwKeyword.mode = originalMode;
+    if (originalMode === "query") {
+      kwKeyword.query = originalQuery;
+    }
     if (ranges) {
       kw.min_price = ranges.min_price;
       kw.max_price = ranges.max_price;
@@ -1451,9 +1753,7 @@
     renderKeywords(ping);
     markPingChanged();
     setStatus(
-      preserveExistingRanges
-        ? "Auto mode enabled. Kept existing price ranges and updated keyword/friendly name."
-        : "Keyword regex + deal ranges generated successfully!",
+      "Generated deal ranges applied.",
       "ok"
     );
   }
@@ -1467,9 +1767,10 @@
     return value === null || value === undefined || String(value).trim() === "";
   }
 
-  function reverseParseComponentData(keyword, componentType) {
-    const keywordText = String(keyword?.keyword || "");
-    const friendly = String(keyword?.friendly_name || "");
+  function reverseParseComponentData(item, componentType) {
+    const itemKeyword = ensureItemKeywordConfig(item);
+    const keywordText = String(itemKeyword?.filter || "");
+    const friendly = String(item?.friendly_name || "");
     const combined = `${keywordText} ${friendly}`;
     const defaults = getDefaultComponentData(componentType);
 
@@ -1526,13 +1827,15 @@
     return defaults;
   }
 
-  function applyTypedMetaToKeyword(keyword, ping, keywordMeta, showError = false) {
+  function applyTypedMetaToKeyword(item, ping, keywordMeta, showError = false) {
     if (!keywordMeta || keywordMeta.mode !== "typed" || !keywordMeta.component_type) return false;
+    const itemKeyword = ensureItemKeywordConfig(item);
+    autoGenerateContext.item_mode = itemKeyword.mode || "poll";
     const componentType = keywordMeta.component_type;
     const componentData = (keywordMeta.component_data && typeof keywordMeta.component_data === "object")
       ? keywordMeta.component_data
       : {};
-    const parsedFallbackData = reverseParseComponentData(keyword, componentType);
+    const parsedFallbackData = reverseParseComponentData(item, componentType);
     const normalizedComponentData = {
       ...getDefaultComponentData(componentType),
       ...parsedFallbackData,
@@ -1550,8 +1853,8 @@
     const generated = generateKeywordFromComponent(
       componentType,
       normalizedComponentData,
-      keyword.keyword || "",
-      keyword.friendly_name || "",
+      itemKeyword.filter || "",
+      item.friendly_name || "",
     );
     if (generated.error) {
       if (showError) {
@@ -1560,8 +1863,8 @@
       return false;
     }
 
-    keyword.keyword = generated.keyword;
-    keyword.friendly_name = generated.friendlyName;
+    itemKeyword.filter = generated.keyword;
+    item.friendly_name = generated.friendlyName;
     return true;
   }
 
@@ -2210,7 +2513,7 @@
     }
 
     if (message.type === "validated") {
-      setStatus(message.message || "JSONC looks valid", "ok");
+      setStatus(message.message || "JSON looks valid", "ok");
       return;
     }
 
@@ -2283,10 +2586,20 @@
     }
     
     // Validate price ranges
-    ping.keywords.forEach((keyword, kIndex) => {
+    ping.items.forEach((keyword, kIndex) => {
       if (keyword.min_price !== null && keyword.max_price !== null) {
         if (keyword.min_price > keyword.max_price) {
-          errors.push(`Ping ${index + 1}, Keyword ${kIndex + 1}: Min price cannot be greater than max price`);
+          errors.push(`Ping ${index + 1}, Item ${kIndex + 1}: Min price cannot be greater than max price`);
+        }
+      }
+      if (keyword.target_price !== null && keyword.max_price !== null) {
+        if (keyword.target_price > keyword.max_price) {
+          errors.push(`Ping ${index + 1}, Item ${kIndex + 1}: Target price cannot be greater than max price`);
+        }
+      }
+      if (keyword.target_price !== null && keyword.min_price !== null) {
+        if (keyword.target_price < keyword.min_price) {
+          errors.push(`Ping ${index + 1}, Item ${kIndex + 1}: Target price cannot be below min price`);
         }
       }
       
@@ -2297,10 +2610,10 @@
         const goodEnd = keyword.deal_ranges.good_deal?.end || 0;
         
         if (fireEnd > greatEnd) {
-          errors.push(`Ping ${index + 1}, Keyword ${kIndex + 1}: Fire deal end must be <= Great deal end`);
+          errors.push(`Ping ${index + 1}, Item ${kIndex + 1}: Fire deal end must be <= Great deal end`);
         }
         if (greatEnd > goodEnd) {
-          errors.push(`Ping ${index + 1}, Keyword ${kIndex + 1}: Great deal end must be <= Good deal end`);
+          errors.push(`Ping ${index + 1}, Item ${kIndex + 1}: Great deal end must be <= Good deal end`);
         }
       }
     });
@@ -2327,7 +2640,7 @@
 
   function ensurePingDefaults(ping) {
     if (!Array.isArray(ping.categories)) ping.categories = [];
-    if (!Array.isArray(ping.keywords)) ping.keywords = [];
+    if (!Array.isArray(ping.items)) ping.items = [];
     if (!Array.isArray(ping.exclude_keywords)) ping.exclude_keywords = [];
     if (!Array.isArray(ping.blocklist_override)) ping.blocklist_override = [];
     if (!Array.isArray(ping.do_not_show)) ping.do_not_show = [];
@@ -2337,7 +2650,7 @@
     return {
       category_name: "New Ping",
       categories: [],
-      keywords: [],
+      items: [],
       channel_id: 0,
       role: 0,
       price_ranges_last_updated: new Date().toISOString(),
@@ -2348,9 +2661,13 @@
     };
   }
 
-  function createDefaultKeyword() {
+  function createDefaultItem() {
     return {
-      keyword: "",
+      keyword: {
+        mode: "poll",
+        filter: "",
+        query: null,
+      },
       min_price: null,
       max_price: null,
       target_price: null,
@@ -2385,20 +2702,20 @@
 
     state.pings.forEach((ping, pingIndex) => {
       if (!state.editor_metadata.pings[pingIndex] || typeof state.editor_metadata.pings[pingIndex] !== "object") {
-        state.editor_metadata.pings[pingIndex] = { keywords: [] };
+        state.editor_metadata.pings[pingIndex] = { items: [] };
       }
       const pingMeta = state.editor_metadata.pings[pingIndex];
-      if (!Array.isArray(pingMeta.keywords)) {
-        pingMeta.keywords = [];
+      if (!Array.isArray(pingMeta.items)) {
+        pingMeta.items = [];
       }
-      if (!Array.isArray(ping.keywords)) {
-        ping.keywords = [];
+      if (!Array.isArray(ping.items)) {
+        ping.items = [];
       }
 
-      ping.keywords.forEach((_keyword, keywordIndex) => {
-        const existing = pingMeta.keywords[keywordIndex];
+      ping.items.forEach((_item, itemIndex) => {
+        const existing = pingMeta.items[itemIndex];
         if (!existing || typeof existing !== "object") {
-          pingMeta.keywords[keywordIndex] = createDefaultKeywordMeta(false);
+          pingMeta.items[itemIndex] = createDefaultKeywordMeta(false);
           return;
         }
         if (existing.mode !== "manual" && existing.mode !== "typed") {
@@ -2412,7 +2729,7 @@
         }
       });
 
-      pingMeta.keywords.length = ping.keywords.length;
+      pingMeta.items.length = ping.items.length;
     });
 
     state.editor_metadata.pings.length = state.pings.length;
@@ -2421,10 +2738,10 @@
   function getKeywordMeta(pingIndex, keywordIndex) {
     ensureEditorMetadataForAllPings();
     const pingMeta = state.editor_metadata.pings[pingIndex];
-    if (!pingMeta.keywords[keywordIndex]) {
-      pingMeta.keywords[keywordIndex] = createDefaultKeywordMeta(false);
+    if (!pingMeta.items[keywordIndex]) {
+      pingMeta.items[keywordIndex] = createDefaultKeywordMeta(false);
     }
-    return pingMeta.keywords[keywordIndex];
+    return pingMeta.items[keywordIndex];
   }
 
   function buildSaveParsedPayload() {
@@ -2446,6 +2763,23 @@
     keyword.min_price = minValue;
     keyword.max_price = maxValue;
     return { minValue, maxValue };
+  }
+
+  function getItemPriceValidationMessage(item) {
+    const min = item.min_price;
+    const max = item.max_price;
+    const target = item.target_price;
+
+    if (min !== null && max !== null && min > max) {
+      return "Min price cannot be greater than max price.";
+    }
+    if (target !== null && max !== null && target > max) {
+      return "Target price cannot be greater than max price.";
+    }
+    if (target !== null && min !== null && target < min) {
+      return "Target price cannot be below min price.";
+    }
+    return null;
   }
 
   function validateKeywordPrices(keyword) {
@@ -2487,7 +2821,7 @@
     editor.appendChild(hint);
 
     if (!keyword.deal_ranges || typeof keyword.deal_ranges !== "object") {
-      keyword.deal_ranges = createDefaultKeyword().deal_ranges;
+      keyword.deal_ranges = createDefaultItem().deal_ranges;
     }
 
     dealNames.forEach((dealName) => {
@@ -3067,7 +3401,7 @@
           } else if (selectedItem) {
             trigger.innerHTML = `${selectedItem.title} <span style="opacity: 0.5; font-size: 0.7em; margin-left: 6px;">▼</span>`;
           } else {
-            trigger.innerHTML = `Select a ${key}... <span style="opacity: 0.5; font-size: 0.7em; margin-left: 6px;">▼</span>`;
+            trigger.innerHTML = `Select a ${key === "channel_id" ? "channel" : key}... <span style="opacity: 0.5; font-size: 0.7em; margin-left: 6px;">▼</span>`;
           }
           
           trigger.addEventListener("click", (e) => {
@@ -3252,130 +3586,61 @@
     keywordCardsEl.innerHTML = "";
     ensureEditorMetadataForAllPings();
 
-    ping.keywords.forEach((keyword, keywordIndex) => {
-      if (!keyword.deal_ranges) {
-        keyword.deal_ranges = createDefaultKeyword().deal_ranges;
+    ping.items.forEach((item, keywordIndex) => {
+      const itemKeyword = ensureItemKeywordConfig(item);
+      if (!item.deal_ranges) {
+        item.deal_ranges = createDefaultItem().deal_ranges;
       }
       const keywordMeta = getKeywordMeta(selectedPingIndex, keywordIndex);
-      const isTyped = keywordMeta.mode === "typed" && !!keywordMeta.component_type;
-
-      if (isTyped) {
-        applyTypedMetaToKeyword(keyword, ping, keywordMeta, false);
-      }
-
       const card = document.createElement("div");
       card.className = "surface nested card small";
+      const itemValidationMessage = getItemPriceValidationMessage(item);
+      if (itemValidationMessage) {
+        const banner = document.createElement("div");
+        banner.className = "validation-banner";
+        banner.textContent = `Validation error: ${itemValidationMessage}`;
+        card.appendChild(banner);
+      }
 
       const head = document.createElement("div");
       head.className = "card-head";
       const title = document.createElement("h2");
-      title.textContent = `Keyword ${keywordIndex + 1}`;
+      title.textContent = `Item ${keywordIndex + 1}`;
 
       const workflowControls = document.createElement("div");
       workflowControls.className = "keyword-quick-adjust";
 
-      const modeSelect = document.createElement("select");
-      const manualModeOpt = document.createElement("option");
-      manualModeOpt.value = "manual";
-      manualModeOpt.textContent = "Manual";
-      const typedModeOpt = document.createElement("option");
-      typedModeOpt.value = "typed";
-      typedModeOpt.textContent = "Auto";
-      modeSelect.appendChild(manualModeOpt);
-      modeSelect.appendChild(typedModeOpt);
-      modeSelect.value = keywordMeta.mode || "manual";
-
-      const componentSelect = document.createElement("select");
-      const componentPlaceholderOpt = document.createElement("option");
-      componentPlaceholderOpt.value = "";
-      componentPlaceholderOpt.textContent = "Component Type";
-      componentSelect.appendChild(componentPlaceholderOpt);
-      AUTO_COMPONENT_TYPES.filter(c => c.value !== "custom").forEach((component) => {
-        const option = document.createElement("option");
-        option.value = component.value;
-        option.textContent = component.label;
-        componentSelect.appendChild(option);
-      });
-      componentSelect.value = keywordMeta.component_type || "";
-
-      const configureButton = document.createElement("button");
-      configureButton.className = "tonal";
-      configureButton.textContent = isTyped ? "Configure" : "Convert";
-      configureButton.disabled = false;
-
-      if (!componentSelect.value) {
-        const inferredType = inferComponentTypeFromKeyword(keyword.keyword || "");
-        if (inferredType && inferredType !== "custom") {
-          componentSelect.value = inferredType;
+      const operationModeSelect = document.createElement("select");
+      const pollModeOpt = document.createElement("option");
+      pollModeOpt.value = "poll";
+      pollModeOpt.textContent = "Poll";
+      const queryModeOpt = document.createElement("option");
+      queryModeOpt.value = "query";
+      queryModeOpt.textContent = "Query";
+      operationModeSelect.appendChild(pollModeOpt);
+      operationModeSelect.appendChild(queryModeOpt);
+      operationModeSelect.value = itemKeyword.mode || "poll";
+      operationModeSelect.addEventListener("change", () => {
+        itemKeyword.mode = operationModeSelect.value;
+        if (itemKeyword.mode === "poll") {
+          itemKeyword.query = null;
+          if (typeof itemKeyword.filter !== "string") itemKeyword.filter = "";
         }
-      }
-      if (!keywordMeta.component_type && componentSelect.value) {
-        keywordMeta.component_type = componentSelect.value;
-      }
-
-      componentSelect.addEventListener("change", () => {
-        keywordMeta.component_type = componentSelect.value || null;
-        if (!keywordMeta.component_type) {
-          keywordMeta.component_data = {};
-        } else if (!keywordMeta.component_data || typeof keywordMeta.component_data !== "object") {
-          keywordMeta.component_data = getDefaultComponentData(keywordMeta.component_type);
-        }
-        configureButton.disabled = !componentSelect.value;
+        renderKeywords(ping);
         markPingChanged();
-      });
-
-      modeSelect.addEventListener("change", () => {
-        if (modeSelect.value === "manual") {
-          keywordMeta.mode = "manual";
-          renderKeywords(ping);
-          markPingChanged();
-          return;
-        }
-
-        const targetType = componentSelect.value || keywordMeta.component_type || inferComponentTypeFromKeyword(keyword.keyword || "");
-        if (!targetType || targetType === "custom") {
-          setStatus("Pick a component type before converting to auto mode.", "error");
-          modeSelect.value = "manual";
-          return;
-        }
-        keywordMeta.component_type = targetType;
-        const parsedData = reverseParseComponentData(keyword, targetType);
-        openAutoGenerateModal(keywordIndex, {
-          conversion_mode: true,
-          force_component_type: targetType,
-          prefill_component_data: parsedData,
-        });
-        modeSelect.value = "manual";
-        setStatus("Auto mode setup: review/edit component fields, then click Generate to apply.", "warning");
-      });
-
-      configureButton.addEventListener("click", () => {
-        const targetType = componentSelect.value || keywordMeta.component_type || inferComponentTypeFromKeyword(keyword.keyword || "");
-        if (!targetType) return;
-        const parsedData = reverseParseComponentData(keyword, targetType);
-        openAutoGenerateModal(keywordIndex, {
-          conversion_mode: !isTyped,
-          force_component_type: targetType,
-          prefill_component_data: parsedData,
-        });
-        if (isTyped) {
-          setStatus("Update fields in the modal and click Generate to refresh this keyword.", "ok");
-        } else {
-          setStatus("Auto mode setup: review/edit component fields, then click Generate to apply.", "warning");
-        }
       });
 
       const duplicateKeywordButton = document.createElement("button");
       duplicateKeywordButton.className = "tonal";
       duplicateKeywordButton.textContent = "Duplicate";
       duplicateKeywordButton.addEventListener("click", () => {
-        const copy = JSON.parse(JSON.stringify(keyword));
-        ping.keywords.splice(keywordIndex + 1, 0, copy);
+        const copy = JSON.parse(JSON.stringify(item));
+        ping.items.splice(keywordIndex + 1, 0, copy);
         const copiedMeta = cloneJson(keywordMeta || createDefaultKeywordMeta(false));
-        state.editor_metadata.pings[selectedPingIndex].keywords.splice(keywordIndex + 1, 0, copiedMeta);
+        state.editor_metadata.pings[selectedPingIndex].items.splice(keywordIndex + 1, 0, copiedMeta);
         renderKeywords(ping);
         markPingChanged();
-        setStatus(`Duplicated keyword ${keywordIndex + 1}.`, "ok");
+        setStatus(`Duplicated item ${keywordIndex + 1}.`, "ok");
       });
 
       const removeButton = document.createElement("button");
@@ -3383,22 +3648,18 @@
       removeButton.textContent = "Remove";
       removeButton.addEventListener("click", async () => {
         const shouldDelete = await confirmAction(
-          "Delete Keyword",
-          `Delete keyword ${keywordIndex + 1}?`,
+          "Delete Item",
+          `Delete item ${keywordIndex + 1}?`,
           "Delete",
           "danger"
         );
         if (!shouldDelete) return;
-        ping.keywords.splice(keywordIndex, 1);
-        state.editor_metadata.pings[selectedPingIndex].keywords.splice(keywordIndex, 1);
+        ping.items.splice(keywordIndex, 1);
+        state.editor_metadata.pings[selectedPingIndex].items.splice(keywordIndex, 1);
         renderKeywords(ping);
         markPingChanged();
       });
-      workflowControls.appendChild(modeSelect);
-      if (isTyped) {
-        workflowControls.appendChild(componentSelect);
-      }
-      workflowControls.appendChild(configureButton);
+      workflowControls.appendChild(operationModeSelect);
       head.appendChild(title);
       head.appendChild(workflowControls);
       head.appendChild(duplicateKeywordButton);
@@ -3407,17 +3668,40 @@
       const grid = document.createElement("div");
       grid.className = "grid";
 
-      const addKeywordSectionHeader = (titleText) => {
+      const addLabelWithTooltip = (labelEl, tooltipText) => {
+        if (!tooltipText) return labelEl;
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.alignItems = "center";
+        row.style.gap = "6px";
+        row.appendChild(labelEl);
+
+        const tooltip = document.createElement("div");
+        tooltip.className = "tooltip-container";
+        const icon = document.createElement("span");
+        icon.className = "tooltip-icon";
+        icon.textContent = "ⓘ";
+        const text = document.createElement("span");
+        text.className = "tooltip-text";
+        text.textContent = tooltipText;
+        tooltip.appendChild(icon);
+        tooltip.appendChild(text);
+        row.appendChild(tooltip);
+        return row;
+      };
+
+      const addKeywordSectionHeader = (titleText, tooltipText = "") => {
         const section = document.createElement("div");
         section.className = "field full";
         const heading = document.createElement("label");
         heading.style.fontWeight = "600";
         heading.style.letterSpacing = "0";
         heading.textContent = titleText;
-        section.appendChild(heading);
+        section.appendChild(addLabelWithTooltip(heading, tooltipText));
         grid.appendChild(section);
       };
 
+      const isTyped = keywordMeta.mode === "typed" && !!keywordMeta.component_type;
       if (isTyped) {
         addKeywordSectionHeader("Component");
         const componentType = keywordMeta.component_type;
@@ -3455,7 +3739,7 @@
           input.value = componentData[key] ?? "";
           input.addEventListener("change", () => {
             componentData[key] = input.value;
-            if (!applyTypedMetaToKeyword(keyword, ping, keywordMeta, true)) {
+            if (!applyTypedMetaToKeyword(item, ping, keywordMeta, true)) {
               setStatus("Missing required typed fields. Update the missing values to continue.", "warning");
             } else {
               renderKeywords(ping);
@@ -3508,90 +3792,245 @@
           }
         }
 
-        addKeywordSectionHeader("Matching");
-        const basicFields = [
-          ["friendly_name", "Friendly Name", "text", "full"],
-          ["keyword", "Keyword / Regex", "text", "full"],
-          ["min_price", "Min Price", "number", "third"],
-          ["max_price", "Max Price", "number", "third"],
-          ["target_price", "Target Price", "number", "third"],
-        ];
+        addKeywordSectionHeader(
+          "Matching",
+          "Filter supports plaintext or regexp:: patterns. Query is only used in query mode.",
+        );
+        const basicFields = itemKeyword.mode === "query"
+          ? [
+            ["friendly_name", "Friendly Name", "text", "half"],
+            ["keyword_query", "Query", "text", "half"],
+            ["keyword_filter", "Filter", "text", "full"],
+            ["min_price", "Min Price", "number", "third"],
+            ["max_price", "Max Price", "number", "third"],
+            ["target_price", "Target Price", "number", "third"],
+          ]
+          : [
+            ["friendly_name", "Friendly Name", "text", "half"],
+            ["keyword_filter", "Filter", "text", "half"],
+            ["min_price", "Min Price", "number", "third"],
+            ["max_price", "Max Price", "number", "third"],
+            ["target_price", "Target Price", "number", "third"],
+          ];
+        let priceValidationMsg = null;
         basicFields.forEach(([key, labelText, type, cls]) => {
           const wrapper = document.createElement("div");
           wrapper.className = `field ${cls}`;
           const label = document.createElement("label");
           label.textContent = labelText;
+          const labelNode = key === "keyword_filter"
+            ? addLabelWithTooltip(
+              label,
+              "Use plaintext for simple contains match, or prefix with regexp:: for regex matching.",
+            )
+            : key === "keyword_query"
+              ? addLabelWithTooltip(
+                label,
+                "eBay search query text. Only shown and used when item mode is Query.",
+              )
+              : label;
           const input = document.createElement("input");
           input.type = type;
-          input.value = keyword[key] ?? "";
+          if (key === "keyword_filter") {
+            input.value = itemKeyword.filter ?? "";
+          } else if (key === "keyword_query") {
+            input.value = itemKeyword.query ?? "";
+            input.disabled = itemKeyword.mode !== "query";
+          } else {
+            input.value = item[key] ?? "";
+          }
+          const validatePriceInputs = () => {
+            const msg = getItemPriceValidationMessage(item);
+            const isPriceField = key === "min_price" || key === "max_price" || key === "target_price";
+            if (isPriceField) {
+              if (msg) input.classList.add("invalid");
+              else input.classList.remove("invalid");
+            }
+            priceValidationMsg = msg;
+          };
+          validatePriceInputs();
           input.addEventListener("change", () => {
             if (type === "number") {
-              keyword[key] = input.value === "" ? null : Number(input.value);
-              if (key === "min_price" || key === "max_price") {
-                validateKeywordPrices(keyword);
-                renderKeywords(ping);
-              }
+              item[key] = input.value === "" ? null : Number(input.value);
+              validatePriceInputs();
             } else {
-              keyword[key] = input.value === "" ? null : input.value;
+              if (key === "keyword_filter") {
+                itemKeyword.filter = input.value;
+              } else if (key === "keyword_query") {
+                itemKeyword.query = input.value === "" ? null : input.value;
+              } else {
+                item[key] = input.value === "" ? null : input.value;
+              }
+            }
+            const currentPriceError = getItemPriceValidationMessage(item);
+            if (currentPriceError) {
+              setStatus(currentPriceError, "error");
             }
             markPingChanged();
           });
-          wrapper.appendChild(label);
-          wrapper.appendChild(input);
+          wrapper.appendChild(labelNode);
+          if (key === "keyword_filter") {
+            const inlineRow = document.createElement("div");
+            inlineRow.className = "field-inline-row";
+            inlineRow.appendChild(input);
+            const genBtn = document.createElement("button");
+            genBtn.type = "button";
+            genBtn.className = "tonal";
+            genBtn.textContent = "Generate";
+            genBtn.addEventListener("click", () => {
+              const targetType = keywordMeta.component_type || inferComponentTypeFromKeyword(itemKeyword.filter || "");
+              openFilterGenerateModal(keywordIndex, {
+                conversion_mode: false,
+                force_component_type: targetType && targetType !== "custom" ? targetType : "nvidia_gpu",
+                prefill_component_data: reverseParseComponentData(item, targetType && targetType !== "custom" ? targetType : "nvidia_gpu"),
+              });
+              setStatus("Filter generator opened.", "ok");
+            });
+            inlineRow.appendChild(genBtn);
+            wrapper.appendChild(inlineRow);
+          } else {
+            wrapper.appendChild(input);
+          }
           grid.appendChild(wrapper);
         });
+        if (priceValidationMsg) {
+          const warn = document.createElement("p");
+          warn.className = "hint";
+          warn.style.color = "var(--danger)";
+          warn.textContent = priceValidationMsg;
+          grid.appendChild(warn);
+        }
 
       } else {
-        addKeywordSectionHeader("Matching");
-        const basicFields = [
-          ["friendly_name", "Friendly Name", "text", "half"],
-          ["keyword", "Keyword / Regex", "text", "half"],
-          ["min_price", "Min Price", "number", "third"],
-          ["max_price", "Max Price", "number", "third"],
-          ["target_price", "Target Price", "number", "third"],
-        ];
+        addKeywordSectionHeader(
+          "Matching",
+          "Filter supports plaintext or regexp:: patterns. Query is only used in query mode.",
+        );
+        const basicFields = itemKeyword.mode === "query"
+          ? [
+            ["friendly_name", "Friendly Name", "text", "half"],
+            ["keyword_query", "Query", "text", "half"],
+            ["keyword_filter", "Filter", "text", "full"],
+            ["min_price", "Min Price", "number", "third"],
+            ["max_price", "Max Price", "number", "third"],
+            ["target_price", "Target Price", "number", "third"],
+          ]
+          : [
+            ["friendly_name", "Friendly Name", "text", "half"],
+            ["keyword_filter", "Filter", "text", "half"],
+            ["min_price", "Min Price", "number", "third"],
+            ["max_price", "Max Price", "number", "third"],
+            ["target_price", "Target Price", "number", "third"],
+          ];
 
+        let priceValidationMsg = null;
         basicFields.forEach(([key, labelText, type, cls]) => {
           const wrapper = document.createElement("div");
           wrapper.className = `field ${cls}`;
 
           const label = document.createElement("label");
           label.textContent = labelText;
+          const labelNode = key === "keyword_filter"
+            ? addLabelWithTooltip(
+              label,
+              "Use plaintext for simple contains match, or prefix with regexp:: for regex matching.",
+            )
+            : key === "keyword_query"
+              ? addLabelWithTooltip(
+                label,
+                "eBay search query text. Only shown and used when item mode is Query.",
+              )
+              : label;
 
           const input = document.createElement("input");
           input.type = type;
-          input.value = keyword[key] ?? "";
+          if (key === "keyword_filter") {
+            input.value = itemKeyword.filter ?? "";
+          } else if (key === "keyword_query") {
+            input.value = itemKeyword.query ?? "";
+            input.disabled = itemKeyword.mode !== "query";
+          } else {
+            input.value = item[key] ?? "";
+          }
+          const validatePriceInputs = () => {
+            const msg = getItemPriceValidationMessage(item);
+            const isPriceField = key === "min_price" || key === "max_price" || key === "target_price";
+            if (isPriceField) {
+              if (msg) input.classList.add("invalid");
+              else input.classList.remove("invalid");
+            }
+            priceValidationMsg = msg;
+          };
+          validatePriceInputs();
           input.addEventListener("change", () => {
             if (type === "number") {
-              keyword[key] = input.value === "" ? null : Number(input.value);
-              if (key === "min_price" || key === "max_price") {
-                validateKeywordPrices(keyword);
-                renderKeywords(ping);
-              }
+              item[key] = input.value === "" ? null : Number(input.value);
+              validatePriceInputs();
             } else {
-              keyword[key] = input.value === "" ? null : input.value;
+              if (key === "keyword_filter") {
+                itemKeyword.filter = input.value;
+              } else if (key === "keyword_query") {
+                itemKeyword.query = input.value === "" ? null : input.value;
+              } else {
+                item[key] = input.value === "" ? null : input.value;
+              }
+            }
+            const currentPriceError = getItemPriceValidationMessage(item);
+            if (currentPriceError) {
+              setStatus(currentPriceError, "error");
             }
             markPingChanged();
           });
 
-          wrapper.appendChild(label);
-          wrapper.appendChild(input);
+          wrapper.appendChild(labelNode);
+          if (key === "keyword_filter") {
+            const inlineRow = document.createElement("div");
+            inlineRow.className = "field-inline-row";
+            inlineRow.appendChild(input);
+            const genBtn = document.createElement("button");
+            genBtn.type = "button";
+            genBtn.className = "tonal";
+            genBtn.textContent = "Generate";
+            genBtn.addEventListener("click", () => {
+              const targetType = keywordMeta.component_type || inferComponentTypeFromKeyword(itemKeyword.filter || "");
+              openFilterGenerateModal(keywordIndex, {
+                conversion_mode: false,
+                force_component_type: targetType && targetType !== "custom" ? targetType : "nvidia_gpu",
+                prefill_component_data: reverseParseComponentData(item, targetType && targetType !== "custom" ? targetType : "nvidia_gpu"),
+              });
+              setStatus("Filter generator opened.", "ok");
+            });
+            inlineRow.appendChild(genBtn);
+            wrapper.appendChild(inlineRow);
+          } else {
+            wrapper.appendChild(input);
+          }
           grid.appendChild(wrapper);
         });
+        if (priceValidationMsg) {
+          const warn = document.createElement("p");
+          warn.className = "hint";
+          warn.style.color = "var(--danger)";
+          warn.textContent = priceValidationMsg;
+          grid.appendChild(warn);
+        }
       }
 
-      addKeywordSectionHeader("Filters");
+      addKeywordSectionHeader(
+        "Filters",
+        "These filters affect notification behavior after an item matches.",
+      );
       const dnsWrapper = document.createElement("div");
       dnsWrapper.className = "field full";
       const dnsLabel = document.createElement("label");
-      dnsLabel.textContent = "Keyword-level do_not_show (Exclude these tiers from pings)";
+      dnsLabel.textContent = "Do not show (Item-level) (Excludes selected tiers from pings)";
       dnsWrapper.appendChild(dnsLabel);
 
       const dnsSelect = createMultiSelect(
-        keyword.deal_ranges.do_not_show || [],
+        item.deal_ranges.do_not_show || [],
         dealNames,
         (newValues) => {
-          keyword.deal_ranges.do_not_show = newValues;
+          item.deal_ranges.do_not_show = newValues;
           markPingChanged();
         },
         "Select tiers to exclude..."
@@ -3599,8 +4038,31 @@
       dnsWrapper.appendChild(dnsSelect);
       grid.appendChild(dnsWrapper);
 
-      addKeywordSectionHeader("Deal Ranges");
-      const unifiedTierEditor = createUnifiedTierEditor(keyword, ping);
+      addKeywordSectionHeader(
+        "Deal Ranges",
+        "Deal tiers are evaluated from min/max and these cutoffs.",
+      );
+      const dealAssistWrap = document.createElement("div");
+      dealAssistWrap.className = "field full";
+      const dealAssistRow = document.createElement("div");
+      dealAssistRow.className = "button-row no-justify";
+      const dealAssistBtn = document.createElement("button");
+      dealAssistBtn.type = "button";
+      dealAssistBtn.className = "tonal";
+      dealAssistBtn.textContent = "Generate Deal Ranges";
+      dealAssistBtn.addEventListener("click", () => {
+        const targetType = keywordMeta.component_type || inferComponentTypeFromKeyword(itemKeyword.filter || "");
+        openAutoGenerateModal(keywordIndex, {
+          conversion_mode: false,
+          force_component_type: targetType && targetType !== "custom" ? targetType : "nvidia_gpu",
+          prefill_component_data: reverseParseComponentData(item, targetType && targetType !== "custom" ? targetType : "nvidia_gpu"),
+        });
+        setStatus("Deal-ranges assist opened.", "ok");
+      });
+      dealAssistRow.appendChild(dealAssistBtn);
+      dealAssistWrap.appendChild(dealAssistRow);
+      grid.appendChild(dealAssistWrap);
+      const unifiedTierEditor = createUnifiedTierEditor(item, ping);
       grid.appendChild(unifiedTierEditor);
 
       card.appendChild(head);
@@ -3608,8 +4070,8 @@
       keywordCardsEl.appendChild(card);
     });
 
-    if (ping.keywords.length === 0) {
-      keywordCardsEl.innerHTML = '<p class="muted">No keywords for this ping. Add one.</p>';
+    if (ping.items.length === 0) {
+      keywordCardsEl.innerHTML = '<p class="muted">No items for this ping. Add one.</p>';
     }
   }
 
@@ -3662,8 +4124,7 @@
       }
       
       touchSelectedPingTimestampIfNeeded();
-      send(buildSaveParsedPayload());
-      setStatus("Saving ping changes...", "ok");
+      openSaveDiffDialog(buildSaveParsedPayload());
     });
     document.getElementById("btnDiscard").addEventListener("click", () => discardChanges());
     document.getElementById("btnExport").addEventListener("click", () => send({ action: ACTION_EXPORT_JSON }));
@@ -3765,7 +4226,7 @@
       if (!state.pings.length) return;
       ensureEditorMetadataForAllPings();
       const copy = JSON.parse(JSON.stringify(state.pings[selectedPingIndex]));
-      const metaCopy = cloneJson(state.editor_metadata.pings[selectedPingIndex] || { keywords: [] });
+      const metaCopy = cloneJson(state.editor_metadata.pings[selectedPingIndex] || { items: [] });
       state.pings.splice(selectedPingIndex + 1, 0, copy);
       state.editor_metadata.pings.splice(selectedPingIndex + 1, 0, metaCopy);
       selectedPingIndex++;
@@ -3804,7 +4265,7 @@
     document.getElementById("btnAddPing").addEventListener("click", () => {
       ensureEditorMetadataForAllPings();
       state.pings.push(createDefaultPing());
-      state.editor_metadata.pings.push({ keywords: [] });
+      state.editor_metadata.pings.push({ items: [] });
       selectedPingIndex = state.pings.length - 1;
       renderPingList();
       renderPingDetails();
@@ -3840,18 +4301,23 @@
       if (!state.pings.length) return;
       ensureEditorMetadataForAllPings();
       const ping = state.pings[selectedPingIndex];
-      ping.keywords.push(createDefaultKeyword());
-      state.editor_metadata.pings[selectedPingIndex].keywords.push(createDefaultKeywordMeta(true));
+      ping.items.push(createDefaultItem());
+      state.editor_metadata.pings[selectedPingIndex].items.push(createDefaultKeywordMeta(true));
       renderKeywords(ping);
       markPingChanged();
     });
 
     btnAutoGenerateCancelEl.addEventListener("click", closeAutoGenerateModal);
+    btnFilterGenerateCancelEl.addEventListener("click", closeFilterGenerateModal);
     
     if (autoComponentTypeEl) {
       autoComponentTypeEl.addEventListener("change", () => {
-        setAutoKeywordReadonlyByType(autoComponentTypeEl.value);
         renderAutoComponentFields();
+      });
+    }
+    if (filterComponentTypeEl) {
+      filterComponentTypeEl.addEventListener("change", () => {
+        renderFilterComponentFields();
       });
     }
 
@@ -3866,28 +4332,37 @@
       updateMaxPriceHint();
     });
 
-    autoKeywordEl.addEventListener("input", () => {
-      if (autoComponentTypeEl && autoComponentTypeEl.value === "custom") {
-        // Keep manual keyword editable in custom mode.
-      } else {
-        updateAutoGeneratedKeywordPreview();
-      }
-    });
-
-    autoFriendlyNameEl.addEventListener("input", () => {
-      autoFriendlyNameManuallyEdited = autoFriendlyNameEl.value.trim() !== "";
-      if (!autoFriendlyNameManuallyEdited) {
-        updateAutoGeneratedKeywordPreview();
-      }
-    });
-    
     btnAutoGenerateApplyEl.addEventListener("click", () => {
       applyAutoGeneratedRanges();
+    });
+    btnFilterGenerateApplyEl.addEventListener("click", () => {
+      applyFilterGeneratedKeyword();
+    });
+
+    btnSaveDiffCancelEl.addEventListener("click", () => {
+      closeSaveDiffDialog();
+      setStatus("Save cancelled.", "warning");
+    });
+    btnSaveDiffConfirmEl.addEventListener("click", () => {
+      if (!pendingSavePayload) return;
+      send(pendingSavePayload);
+      closeSaveDiffDialog();
+      setStatus("Saving ping changes...", "ok");
+    });
+    saveDiffOverlayEl.addEventListener("click", (e) => {
+      if (e.target === saveDiffOverlayEl) {
+        closeSaveDiffDialog();
+      }
     });
 
     autoGenerateOverlayEl.addEventListener("click", (e) => {
       if (e.target === autoGenerateOverlayEl) {
         closeAutoGenerateModal();
+      }
+    });
+    filterGenerateOverlayEl.addEventListener("click", (e) => {
+      if (e.target === filterGenerateOverlayEl) {
+        closeFilterGenerateModal();
       }
     });
 

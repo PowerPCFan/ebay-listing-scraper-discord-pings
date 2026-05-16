@@ -1076,6 +1076,67 @@ button.loading {
   justify-content: flex-start;
 }
 
+.field-inline-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.field-inline-row input {
+  flex: 1;
+}
+
+.validation-banner {
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  color: var(--danger);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.84rem;
+}
+
+.save-diff-pre {
+  max-height: 60vh;
+  overflow: auto;
+  background: #0f172a;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  color: #dbeafe;
+  font-size: 0.82rem;
+  line-height: 0.5;
+}
+
+.save-diff-line {
+  display: block;
+  padding: 6px 4px;
+  border-radius: 4px;
+}
+
+#saveDiffModal {
+  width: 90vw !important;
+}
+
+.save-diff-line.ctx {
+  color: #94a3b8;
+}
+
+.save-diff-line.add {
+  background: rgba(22, 163, 74, 0.2);
+  color: #86efac;
+}
+
+.save-diff-line.del {
+  background: rgba(220, 38, 38, 0.2);
+  color: #fca5a5;
+}
+
+.save-diff-line.hunk {
+  margin-top: 6px;
+  color: #facc15;
+  font-weight: 600;
+}
+
 .panel .card-head {
   margin-bottom: 10px;
 }

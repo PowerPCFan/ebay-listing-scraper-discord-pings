@@ -13,6 +13,7 @@ _discord_webhook_send_count = 0
 setLevelValue = logging.DEBUG if gv.config.debug_mode else logging.INFO
 discordPyLevelValue = logging.DEBUG if gv.config.discord_py_debug_mode else logging.INFO
 LOGGER_DISCORD_WEBHOOK_URL = gv.config.logger_webhook
+DISCORD_WEBHOOK_MIN_LEVEL = logging.INFO
 
 ANSI = "\033["
 RESET = f"{ANSI}0m"
@@ -319,9 +320,6 @@ class DiscordWebhookHandler(logging.Handler):
                 print(f"[ ERROR ] Discord webhook worker error: {e}")
 
     def emit(self, record: logging.LogRecord) -> None:
-        if record.levelno == logging.DEBUG and not gv.config.debug_mode:
-            return
-
         try:
             level_name = logging.getLevelName(record.levelno)
             asctime = datetime.fromtimestamp(record.created).strftime("%y/%m/%d %H:%M:%S")
@@ -395,7 +393,7 @@ if gv.config.logger_webhook and not _has_discord_handler(logger):
             gv.config.logger_webhook,
             f"<@{str(gv.config.logger_webhook_ping)}>" if gv.config.logger_webhook_ping else None
         )
-        discord_handler.setLevel(setLevelValue)
+        discord_handler.setLevel(DISCORD_WEBHOOK_MIN_LEVEL)
         logger.addHandler(discord_handler)
     except Exception:
         logger.error("Failed to add Discord webhook handler to logger!")

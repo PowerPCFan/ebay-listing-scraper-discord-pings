@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from . import ebay_api
 from . import global_vars as gv
-from .config_tools import PingConfig
+from .config_tools import ItemConfig, KeywordMode, PingConfig
 from .enums import BuyingOption, DealRanges, Match
 from .logger import logger
 from .psu_utils import find_psu_in_tierlist
@@ -114,29 +114,45 @@ async def match(bot: "EbayScraperBot") -> None:
 async def match_single_cycle(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0912, PLR0915
     await change_status(bot=bot, logger=logger, message="Scraping eBay...")
 
-    all_categories = set()
+    all_poll_categories = set()
     ping_to_categories = {}
+    ping_to_poll_items: dict[int, list[ItemConfig]] = {}
+    ping_to_query_items: dict[int, list[ItemConfig]] = {}
 
     for index, ping_config in enumerate(gv.config.pings):
         ping_to_categories[index] = ping_config.categories
-        all_categories.update(ping_config.categories)
+        poll_items = [
+            item_config
+            for item_config in ping_config.items
+            if item_config.keyword.mode == KeywordMode.POLL
+        ]
+        query_items = [
+            item_config
+            for item_config in ping_config.items
+            if item_config.keyword.mode == KeywordMode.QUERY
+        ]
+        ping_to_poll_items[index] = poll_items
+        ping_to_query_items[index] = query_items
+
+        if poll_items:
+            all_poll_categories.update(ping_config.categories)
 
     category_cache = {}
 
     tasks = []
-    for category_id in all_categories:
+    for category_id in all_poll_categories:
         logger.debug(f"Fetching listings for category: {category_id}")
         task = ebay_api.search_single_category(category_id)
         tasks.append(task)
 
     results = await asyncio.gather(*tasks)
 
-    for category_id, items in zip(all_categories, results, strict=True):
+    for category_id, items in zip(all_poll_categories, results, strict=True):
         category_cache[category_id] = items
         logger.debug(f"Cached {len(items)} items for category {category_id}")
 
     logger.debug(
-        f"Fetched {len(all_categories)} unique categories for {len(gv.config.pings)} pings",
+        f"Fetched {len(all_poll_categories)} poll categories for {len(gv.config.pings)} pings",
     )
 
     logger.info(f"Fetched {sum(len(items) for items in results)} items from all categories")
@@ -160,17 +176,21 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0
                 if item_id and item_id not in combined_items:
                     combined_items[item_id] = item_data
 
-        items_list = list(combined_items.values())
-        logger.debug(f"Processing {len(items_list)} items for {ping_config.category_name}")
+        poll_items_list = list(combined_items.values())
+        logger.debug(f"Processing {len(poll_items_list)} poll items for {ping_config.category_name}")  # noqa: E501
 
         new_matches = 0
-        for item_data in items_list:
+        for item_data in poll_items_list:
             item = ebay_api.EbayItem(item_data)
 
             if seen_db.is_seen(item.full_item_id):
                 continue
 
-            matched = matches_ping_criteria(item, ping_config)
+            matched = matches_ping_criteria(
+                item,
+                ping_config,
+                item_configs=ping_to_poll_items[i],
+            )
 
             if matched.is_match:
                 price = _get_item_price(
@@ -190,7 +210,7 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0
                 if matched.deal_ranges and deal in matched.deal_ranges.do_not_show:
                     logger.debug(
                         f"Item rejected: deal type '{deal.name}' is in the "
-                        "keyword-level do_not_show list",
+                        "item-level do_not_show list",
                     )
                     continue
 
@@ -226,6 +246,102 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0
             else:
                 seen_db.mark_seen(item.full_item_id, ping_config.category_name, item.title)
 
+        for item_config in ping_to_query_items[i]:
+            query_text = item_config.keyword.query
+            if not query_text:
+                continue
+
+            query_tasks = [
+                ebay_api.search_query_in_category(
+                    category_id=str(category_id),
+                    query=query_text,
+                )
+                for category_id in ping_to_categories[i]
+            ]
+            query_results = await asyncio.gather(*query_tasks)
+
+            query_items_by_id: dict[str, dict] = {}
+            for result_chunk in query_results:
+                for item_data in result_chunk:
+                    full_item_id = str(item_data.get("itemId", "")).strip()
+                    if full_item_id:
+                        query_items_by_id[full_item_id] = item_data
+
+            detail_items = list(query_items_by_id.values())
+            logger.debug(
+                "Fetched %s query items for query '%s' (%s)",
+                len(detail_items),
+                query_text,
+                ping_config.category_name,
+            )
+
+            for item_data in detail_items:
+                item = ebay_api.EbayItem(item_data)
+
+                if seen_db.is_seen(item.full_item_id):
+                    continue
+
+                matched = matches_ping_criteria(
+                    item,
+                    ping_config,
+                    item_configs=[item_config],
+                )
+
+                if not matched.is_match:
+                    seen_db.mark_seen(item.full_item_id, ping_config.category_name, item.title)
+                    continue
+
+                price = _get_item_price(
+                    item,
+                    include_shipping=gv.config.include_shipping_in_deal_evaluation,
+                )
+
+                deal = evaluate_deal(
+                    price=price,
+                    min_price=matched.min_price,
+                    max_price=matched.max_price,
+                    deal_ranges=matched.deal_ranges,
+                )
+
+                psu_matches = find_psu_in_tierlist(item.title) if ping_config.is_psu else None
+
+                if matched.deal_ranges and deal in matched.deal_ranges.do_not_show:
+                    logger.debug(
+                        f"Item rejected: deal type '{deal.name}' is in the "
+                        "item-level do_not_show list",
+                    )
+                    continue
+
+                if ping_config.do_not_show and deal in ping_config.do_not_show:
+                    logger.debug(
+                        f"Item rejected: deal type '{deal.name}' is in the "
+                        "category-level do_not_show list",
+                    )
+                    continue
+
+                if item.country is not None and item.country != "US":
+                    logger.debug(
+                        f"Item rejected: item country '{item.country}' does not match 'US'",
+                    )
+                    seen_db.mark_seen(item.full_item_id, ping_config.category_name, item.title)
+                    continue
+
+                logger.info(
+                    f"New matching listing: '{item.title}' - ${item.price.value:.2f} ({deal.name})",
+                )
+
+                await bot.send_listing_notification(
+                    item=item,
+                    ping_config=ping_config,
+                    deal=deal,
+                    match_object=matched,
+                    psu=psu_matches,
+                )
+
+                seen_db.mark_seen(item.full_item_id, ping_config.category_name, item.title)
+                new_matches += 1
+                await asyncio.sleep(1)
+
         if new_matches > 0:
             logger.info(
                 f"Found {new_matches} new matching listings for {ping_config.category_name}",
@@ -250,28 +366,40 @@ def _get_item_price(item: ebay_api.EbayItem, include_shipping: bool = False) -> 
     return base_price + shipping_cost
 
 
-def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> Match:  # noqa: C901, PLR0912
+def matches_ping_criteria(  # noqa: C901, PLR0912, PLR0915
+    item: ebay_api.EbayItem,
+    ping_config: PingConfig,
+    item_configs: list[ItemConfig] | None = None,
+) -> Match:
     title_lower = item.title.lower()
 
-    matches_keyword: bool = False
-    matched_keyword: str | None = None
+    matches_filter: bool = False
+    matched_filter: str | None = None
     matching_min_price: float | None = None
     matching_max_price: float | None = None
     matching_target_price: float | None = None
     matching_friendly_name: str | None = None
     matching_deal_ranges: DealRanges | None = None
+    matching_mode_and_query: tuple[KeywordMode, str | None] | None = None
 
     last_updated = ping_config.price_ranges_last_updated
 
-    for keyword_data in ping_config.keywords:
-        keyword = keyword_data.keyword
-        min_price = keyword_data.min_price
-        max_price = keyword_data.max_price
-        target_price = keyword_data.target_price
-        friendly_name = keyword_data.friendly_name
-        deal_ranges = keyword_data.deal_ranges
+    active_items = item_configs if item_configs is not None else ping_config.items
 
-        if matches_pattern(title_lower, keyword):
+    for item_config in active_items:
+        item_keyword = item_config.keyword
+        filter_text = item_keyword.filter
+        min_price = item_config.min_price
+        max_price = item_config.max_price
+        target_price = item_config.target_price
+        friendly_name = item_config.friendly_name
+        deal_ranges = item_config.deal_ranges
+        mode_and_query = (item_keyword.mode, item_keyword.query)
+
+        if filter_text and not matches_pattern(title_lower, filter_text):
+            continue
+
+        if filter_text or item_keyword.mode == KeywordMode.QUERY:
             try:
                 if item.price.value:
                     price = _get_item_price(
@@ -282,14 +410,14 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
                     if min_price and price < min_price:
                         logger.debug(
                             f"Item rejected: price ${price} below min ${min_price} "
-                            f"for keyword '{keyword}'",
+                            f"for filter '{filter_text}'",
                         )
                         continue
 
                     if max_price and price > max_price:
                         logger.debug(
                             f"Item rejected: price ${price} above max ${max_price} "
-                            f"for keyword '{keyword}'",
+                            f"for filter '{filter_text}'",
                         )
                         continue
 
@@ -306,17 +434,18 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             except (ValueError, TypeError):
                 pass
 
-            matches_keyword = True
-            matched_keyword = keyword
+            matches_filter = True
+            matched_filter = filter_text
             matching_min_price = min_price
             matching_max_price = max_price
             matching_target_price = target_price
             matching_friendly_name = friendly_name
             matching_deal_ranges = deal_ranges
+            matching_mode_and_query = mode_and_query
             break
 
-    if not matches_keyword:
-        logger.debug(f"Item rejected: no keyword match for '{item.title}...'")
+    if not matches_filter:
+        logger.debug(f"Item rejected: no item filter match for '{item.title}...'")
         return Match(
             is_match=False,
             min_price=None,
@@ -326,9 +455,11 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             deal_ranges=None,
             regex=None,
             last_updated=last_updated,
+            mode=matching_mode_and_query[0] if matching_mode_and_query else KeywordMode.POLL,
+            query=matching_mode_and_query[1] if matching_mode_and_query and matching_mode_and_query[1] else None,  # noqa: E501
         )
 
-    logger.debug(f"Item matched keyword '{matched_keyword}': {item.title}...")
+    logger.debug(f"Item matched filter '{matched_filter}': {item.title}...")
 
     for exclude_keyword in ping_config.exclude_keywords:
         if matches_pattern(title_lower, exclude_keyword):
@@ -341,6 +472,8 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
                 deal_ranges=None,
                 regex=None,
                 last_updated=last_updated,
+                mode=matching_mode_and_query[0] if matching_mode_and_query else KeywordMode.POLL,
+                query=matching_mode_and_query[1] if matching_mode_and_query and matching_mode_and_query[1] else None,  # noqa: E501
             )
 
     if is_globally_blocked(title_lower, "", "") and not matches_blocklist_override(
@@ -356,6 +489,8 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             deal_ranges=None,
             regex=None,
             last_updated=last_updated,
+            mode=matching_mode_and_query[0] if matching_mode_and_query else KeywordMode.POLL,
+            query=matching_mode_and_query[1] if matching_mode_and_query and matching_mode_and_query[1] else None,  # noqa: E501
         )
 
     if is_seller_blocked(item.seller.username):
@@ -369,6 +504,8 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             deal_ranges=None,
             regex=None,
             last_updated=last_updated,
+            mode=matching_mode_and_query[0] if matching_mode_and_query else KeywordMode.POLL,
+            query=matching_mode_and_query[1] if matching_mode_and_query and matching_mode_and_query[1] else None,  # noqa: E501
         )
 
     if BuyingOption.FIXED_PRICE not in item.buying_options:
@@ -381,6 +518,8 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
             deal_ranges=None,
             regex=None,
             last_updated=last_updated,
+            mode=matching_mode_and_query[0] if matching_mode_and_query else KeywordMode.POLL,
+            query=matching_mode_and_query[1] if matching_mode_and_query and matching_mode_and_query[1] else None,  # noqa: E501
         )
 
     return Match(
@@ -390,6 +529,8 @@ def matches_ping_criteria(item: ebay_api.EbayItem, ping_config: PingConfig) -> M
         target_price=matching_target_price,
         friendly_name=matching_friendly_name,
         deal_ranges=matching_deal_ranges,
-        regex=matched_keyword,
+        regex=matched_filter,
         last_updated=last_updated,
+        mode=matching_mode_and_query[0] if matching_mode_and_query else KeywordMode.POLL,
+        query=matching_mode_and_query[1] if matching_mode_and_query and matching_mode_and_query[1] else None,  # noqa: E501
     )

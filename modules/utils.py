@@ -1,10 +1,13 @@
+# ruff: noqa: PLR2004
+
 import os
 import re as regexp
 import signal
 import subprocess
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import discord
 
@@ -65,7 +68,7 @@ def is_within_sleep_hours() -> bool:
 
         if start_time <= end_time:
             return start_time <= current_time <= end_time
-        else:  # noqa: RET505
+        else:
             return current_time >= start_time or current_time <= end_time
     except (ValueError, TypeError):
         logger.exception("Invalid sleep_hours format. Expected HH:MM+/-HH:MM (e.g., '23:00-05:00')")
@@ -233,7 +236,7 @@ def evaluate_deal(  # noqa: PLR0911
     if price <= min_price + quarter:
         # price is in the first quarter
         return Deal.FIRE_DEAL
-    elif price <= min_price + 2 * quarter:  # noqa: RET505
+    elif price <= min_price + 2 * quarter:
         # price is in the second quarter
         return Deal.GREAT_DEAL
     elif price <= min_price + 3 * quarter:
@@ -282,11 +285,17 @@ async def change_status(
         if logger:
             logger.exception("Failed to change Discord presence:")
 
+class SellerRiskContext(NamedTuple):
+    feedback_score: float | None
+    positive_feedback: float | None
+    title: str
 
-def determine_risk(
+SellerRiskRule = Callable[[SellerRiskContext], str | None]
+
+def determine_risk(  # noqa: C901
     feedback_score: float | None,
     positive_feedback: float | None,
-    title: str,  # noqa: ARG001
+    title: str,
 ) -> tuple[bool, str | None]:
     """
     Determines the risk level of a listing based on seller attributes.
@@ -294,33 +303,68 @@ def determine_risk(
     Returns a `tuple[bool, str | None]` where the `bool` indicates if the listing is high risk, and the `str` is an optional message describing the flag reason.
     """  # noqa: E501
 
-    if feedback_score is None and positive_feedback is None:
-        return (
-            True,
-            (
-                "The seller has no feedback, which could indicate a "
-                "new account or lack of sale history."
-            ),
-        )
+    def missing_feedback_rule(ctx: SellerRiskContext) -> str | None:
+        if ctx.feedback_score is None and ctx.positive_feedback is None:
+            return (
+                "The seller has no visible feedback, which could indicate a "
+                "new account or limited sales history."
+            )
+        return None
 
-    feedback_threshold = 90.0
-    feedback_score_threshold = 40
+    def very_low_score_rule(ctx: SellerRiskContext) -> str | None:
+        if ctx.feedback_score is None:
+            return None
 
-    if not positive_feedback or positive_feedback < feedback_threshold:
-        positive_feedback = positive_feedback or 0.0
-        return (
-            True,
-            f"The seller has a low positive feedback percentage of {positive_feedback:.2f}%.",
-        )
+        if ctx.feedback_score < 10 and (
+            ctx.positive_feedback is None or ctx.positive_feedback < 99.5
+        ):
+            return (
+                "The seller has a very low feedback score "
+                f"({ctx.feedback_score:.0f}), indicating limited selling history."
+            )
 
-    if not feedback_score or feedback_score < feedback_score_threshold:
-        feedback_score = feedback_score or 0.0
-        return (True, f"The seller has a low feedback score of {feedback_score:.0f}.")
+        return None
 
-    # risky_keywords: list[str] = []
+    def low_positive_feedback_rule(ctx: SellerRiskContext) -> str | None:
+        if ctx.positive_feedback is None:
+            return None
 
-    # for keyword in risky_keywords:
-    #     if keyword.lower() in title.lower():
-    #         return (True, f"The listing title contains the keyword '{keyword}'.")
+        if ctx.positive_feedback < 90.0:
+            return (
+                "The seller has a low positive feedback percentage of "
+                f"{ctx.positive_feedback:.2f}%."
+            )
+
+        return None
+
+    def mixed_low_history_rule(ctx: SellerRiskContext) -> str | None:
+        if ctx.feedback_score is None or ctx.positive_feedback is None:
+            return None
+
+        if ctx.feedback_score < 25 and ctx.positive_feedback < 97.0:
+            return (
+                "The seller has low history and mixed reputation "
+                f"({ctx.feedback_score:.0f} score, {ctx.positive_feedback:.2f}% positive)."
+            )
+
+        return None
+
+    rules: tuple[SellerRiskRule, ...] = (
+        missing_feedback_rule,
+        very_low_score_rule,
+        low_positive_feedback_rule,
+        mixed_low_history_rule,
+    )
+
+    context = SellerRiskContext(
+        feedback_score=feedback_score,
+        positive_feedback=positive_feedback,
+        title=title,
+    )
+
+    for rule in rules:
+        message = rule(context)
+        if message:
+            return (True, message)
 
     return (False, None)

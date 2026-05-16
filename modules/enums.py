@@ -4,6 +4,26 @@ from enum import Enum
 from typing import NamedTuple, Self
 
 
+class KeywordMode(Enum):
+    POLL = "poll"
+    QUERY = "query"
+
+    @staticmethod
+    def from_str(value) -> "KeywordMode":  # noqa: ANN001
+        if not value:
+            msg = "Keyword mode is required and cannot be empty."
+            raise ValueError(msg)
+
+        match str(value).strip().lower():
+            case "poll":
+                return KeywordMode.POLL
+            case "query":
+                return KeywordMode.QUERY
+            case _:
+                msg = "Keyword mode must be 'poll' or 'query'."
+                raise ValueError(msg)
+
+
 @dataclass
 class PriceRange:
     start: float
@@ -179,6 +199,9 @@ class Match(NamedTuple):
     friendly_name: str | None
     regex: str | None
     last_updated: str | None
+
+    mode: KeywordMode
+    query: str | None = None  # only used in query mode
 
 
 class Emojis:

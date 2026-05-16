@@ -57,8 +57,8 @@
 
           <section class="surface nested card">
             <header class="card-head">
-              <h2>Keywords & Deal Ranges</h2>
-              <button id="btnAddKeyword">Add Keyword</button>
+              <h2>Items & Deal Ranges</h2>
+              <button id="btnAddKeyword">Add Item</button>
             </header>
             <div id="keywordCards"></div>
           </section>
@@ -197,7 +197,7 @@
       </div>
       <div class="field">
         <label for="blocklistAddValue">Keyword</label>
-        <input id="blocklistAddValue" type="text" placeholder="Enter keyword or regex pattern" />
+        <input id="blocklistAddValue" type="text" placeholder="Enter plaintext or regex pattern" />
         <p class="hint" id="blocklistAddHint">Saved as plaintext.</p>
       </div>
       <div class="button-row modal-actions">
@@ -209,22 +209,13 @@
 
   <div id="autoGenerateOverlay" class="modal-overlay" aria-hidden="true">
     <div id="autoGenerateModal" class="modal surface" role="dialog" aria-modal="true">
-      <h2 id="autoGenerateTitle">Auto-Generate Deal Ranges</h2>
-      <p class="hint">Choose a component type, fill the fields, and generate regex + deal ranges.</p>
+      <h2 id="autoGenerateTitle">Generate Deal Ranges</h2>
+      <p class="hint">Generate pricing + deal ranges for the selected item.</p>
       
       <div class="grid">
         <div class="field">
           <label for="autoComponentType">Component Type</label>
           <select id="autoComponentType"></select>
-        </div>
-
-        <div id="autoComponentFields" class="field full">
-          <div class="grid" id="autoComponentFieldsGrid"></div>
-        </div>
-
-        <div class="field">
-          <label for="autoFriendlyName">Friendly Name</label>
-          <input type="text" id="autoFriendlyName" placeholder="Leave blank to auto-fill" />
         </div>
         
         <div class="field">
@@ -244,15 +235,43 @@
           <p class="hint" id="maxPriceHint">Suggested: $0</p>
         </div>
         
-        <div class="field">
-          <label for="autoKeyword">Keyword / Regex</label>
-          <input type="text" id="autoKeyword" placeholder="Generated from selected component type" readonly />
-        </div>
       </div>
       
       <div class="button-row modal-actions">
         <button id="btnAutoGenerateCancel" class="tonal">Cancel</button>
-        <button id="btnAutoGenerateApply" class="primary">Generate</button>
+        <button id="btnAutoGenerateApply" class="primary">Generate Deal Ranges</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="filterGenerateOverlay" class="modal-overlay" aria-hidden="true">
+    <div id="filterGenerateModal" class="modal surface" role="dialog" aria-modal="true">
+      <h2>Filter Generator</h2>
+      <p class="hint">Generate a filter pattern from component presets and apply it to this item.</p>
+      <div class="grid">
+        <div class="field">
+          <label for="filterComponentType">Component Type</label>
+          <select id="filterComponentType"></select>
+        </div>
+        <div class="field full">
+          <div class="grid" id="filterComponentFieldsGrid"></div>
+        </div>
+      </div>
+      <div class="button-row modal-actions">
+        <button id="btnFilterGenerateCancel" class="tonal">Cancel</button>
+        <button id="btnFilterGenerateApply" class="primary">Apply Filter</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="saveDiffOverlay" class="modal-overlay" aria-hidden="true">
+    <div id="saveDiffModal" class="modal surface" role="dialog" aria-modal="true" style="max-width: 1200px;">
+      <h2>JSON Diff</h2>
+      <p class="hint">Use this to review changes before saving.</p>
+      <pre id="saveDiffPre" class="save-diff-pre"></pre>
+      <div class="button-row modal-actions">
+        <button id="btnSaveDiffCancel" class="tonal">Cancel</button>
+        <button id="btnSaveDiffConfirm" class="primary">Save</button>
       </div>
     </div>
   </div>

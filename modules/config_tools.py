@@ -1,10 +1,9 @@
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self, overload
 
-import json5
-
-from .enums import Deal, DealRanges, DealTuple
+from .enums import Deal, DealRanges, DealTuple, KeywordMode
 
 CONFIG_JSON_POSSIBLE = ["config.json", "config.jsonc"]
 CONFIG_JSON = None
@@ -20,7 +19,7 @@ GLOBAL_BLOCKLIST_TXT = Path(__file__).parent.parent / "global_blocklist.txt"
 
 def get_config_path() -> Path:
     if CONFIG_JSON is None:
-        msg = "No config file found. Please create a config.json or config.jsonc file."
+        msg = "No config file found. Please create a config.json file."
         raise FileNotFoundError(msg)
     return CONFIG_JSON
 
@@ -32,7 +31,7 @@ def get_raw_config() -> str:
 
 def get_parsed_config() -> dict:
     raw = get_raw_config()
-    data = json5.loads(raw)
+    data = json.loads(raw)
     if not isinstance(data, dict):
         msg = "Config root must be a JSON object."
         raise TypeError(msg)
@@ -76,10 +75,55 @@ class GlobalBlocklist:
                 return True
         return False
 
+@dataclass
+class KeywordDefinition:
+    mode: KeywordMode
+    filter: str | None = None
+    query: str | None = None
+
+    def to_dict(self) -> dict[str, str | None]:
+        return {
+            "mode": self.mode.value,
+            "filter": self.filter,
+            "query": self.query,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, str | None]) -> Self:
+        try:
+            mode = KeywordMode.from_str(data.get("mode"))
+        except ValueError as e:
+            msg = "Item keyword mode must be 'poll' or 'query'."
+            raise ValueError(msg) from e
+
+        filter_value = data.get("filter")
+        query_value = data.get("query")
+
+        filter_text = str(filter_value).strip() if isinstance(filter_value, str) else None
+        query_text = str(query_value).strip() if isinstance(query_value, str) else None
+
+        if filter_text == "":
+            filter_text = None
+        if query_text == "":
+            query_text = None
+
+        if mode == KeywordMode.POLL:
+            if not filter_text:
+                msg = "The 'filter' key is required when mode is 'poll'."
+                raise ValueError(msg)
+            if query_text:
+                msg = "The 'query' key must be null/missing when mode is 'poll'."
+                raise ValueError(msg)
+        elif mode == KeywordMode.QUERY and not query_text:
+            msg = "The 'query' key is required when mode is 'query'."
+            raise ValueError(msg)
+
+        return cls(mode=mode, filter=filter_text, query=query_text)
+
 
 @dataclass
-class Keyword:
-    keyword: str
+class ItemConfig:
+    keyword: KeywordDefinition
     min_price: int | None = None
     max_price: int | None = None
     target_price: int | None = None
@@ -88,7 +132,7 @@ class Keyword:
 
     def to_dict(self) -> dict:
         return {
-            "keyword": self.keyword,
+            "keyword": self.keyword.to_dict(),
             "min_price": self.min_price,
             "max_price": self.max_price,
             "target_price": self.target_price,
@@ -99,9 +143,10 @@ class Keyword:
     @classmethod
     def from_dict(cls, data: dict) -> Self:
         ranges = data.get("deal_ranges")
+        keyword_data = data.get("keyword", {})
 
         return cls(
-            keyword=data["keyword"],
+            keyword=KeywordDefinition.from_dict(keyword_data),
             min_price=data.get("min_price"),
             max_price=data.get("max_price"),
             target_price=data.get("target_price"),
@@ -138,14 +183,14 @@ class SelfRoleGroup:
         }
 
 
-Keywords = list[Keyword]
+Items = list[ItemConfig]
 
 
 @dataclass
 class PingConfig:
     category_name: str
     categories: list[int]
-    keywords: Keywords
+    items: Items
     channel_id: int
     role: int
     price_ranges_last_updated: str = "1970-01-01T00:00:00.000+00:00"
@@ -158,7 +203,7 @@ class PingConfig:
         return {
             "category_name": self.category_name,
             "categories": [Config.to_str(c) for c in self.categories],
-            "keywords": [kw.to_dict() for kw in self.keywords],
+            "items": [item.to_dict() for item in self.items],
             "channel_id": Config.to_str(self.channel_id),
             "role": Config.to_str(self.role),
             "price_ranges_last_updated": self.price_ranges_last_updated,
@@ -170,10 +215,15 @@ class PingConfig:
 
     @classmethod
     def from_dict(cls, data: dict) -> Self:
+        items_data = data.get("items")
+        if not isinstance(items_data, list):
+            msg = "Ping config must contain an 'items' array."
+            raise TypeError(msg)
+
         return cls(
             category_name=data["category_name"],
             categories=[c for c in [Config.to_int(v) for v in data["categories"]] if c],
-            keywords=[Keyword.from_dict(d) for d in data["keywords"]],
+            items=[ItemConfig.from_dict(d) for d in items_data],
             channel_id=Config.to_int(str(data["channel_id"])),
             role=Config.to_int(str(data["role"])),
             price_ranges_last_updated=data.get(
@@ -319,7 +369,7 @@ class Config:
             path = get_config_path()
 
         with path.open("w", encoding="utf-8") as f:
-            f.write(json5.dumps(self.to_dict(), indent=4))
+            f.write(json.dumps(self.to_dict(), indent=4))
 
     @classmethod
     def from_dict(cls, data: dict) -> Self:
@@ -354,11 +404,11 @@ class Config:
 
     @staticmethod
     def from_json(json_str: str) -> "Config":
-        data = json5.loads(json_str)
+        data = json.loads(json_str)
         return Config.from_dict(data)  # pyright: ignore[reportArgumentType]
 
     def to_json(self) -> str:
-        return json5.dumps(self.to_dict(), indent=4)
+        return json.dumps(self.to_dict(), indent=4)
 
     @staticmethod
     def load() -> "Config":

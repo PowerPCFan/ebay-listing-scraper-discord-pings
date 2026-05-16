@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict
 
-import json5
 from aiohttp import WSMsgType, web
 from aiohttp.client_exceptions import ClientConnectionResetError
 
@@ -46,38 +45,38 @@ def _reconcile_editor_metadata(metadata: dict[str, Any], parsed: dict[str, Any])
 
     reconciled_pings: list[dict[str, Any]] = []
     for ping_idx, ping in enumerate(pings):
-        ping_keywords = ping.get("keywords") if isinstance(ping, dict) else []
-        if not isinstance(ping_keywords, list):
-            ping_keywords = []
+        ping_items = ping.get("items") if isinstance(ping, dict) else []
+        if not isinstance(ping_items, list):
+            ping_items = []
 
         existing_ping_meta = (
             existing_pings[ping_idx]
             if ping_idx < len(existing_pings) and isinstance(existing_pings[ping_idx], dict)
             else {}
         )
-        existing_keywords_meta = existing_ping_meta.get("keywords")
-        if not isinstance(existing_keywords_meta, list):
-            existing_keywords_meta = []
+        existing_items_meta = existing_ping_meta.get("items")
+        if not isinstance(existing_items_meta, list):
+            existing_items_meta = []
 
-        keywords_meta: list[dict[str, Any]] = []
-        for kw_idx, _ in enumerate(ping_keywords):
-            existing_kw_meta = (
-                existing_keywords_meta[kw_idx]
-                if kw_idx < len(existing_keywords_meta)
-                and isinstance(existing_keywords_meta[kw_idx], dict)
+        items_meta: list[dict[str, Any]] = []
+        for item_idx, _ in enumerate(ping_items):
+            existing_item_meta = (
+                existing_items_meta[item_idx]
+                if item_idx < len(existing_items_meta)
+                and isinstance(existing_items_meta[item_idx], dict)
                 else {}
             )
-            mode = existing_kw_meta.get("mode")
+            mode = existing_item_meta.get("mode")
             if mode not in ("manual", "typed"):
                 mode = "manual"
-            component_type = existing_kw_meta.get("component_type")
+            component_type = existing_item_meta.get("component_type")
             if component_type is not None and not isinstance(component_type, str):
                 component_type = None
-            component_data = existing_kw_meta.get("component_data")
+            component_data = existing_item_meta.get("component_data")
             if not isinstance(component_data, dict):
                 component_data = {}
 
-            keywords_meta.append(
+            items_meta.append(
                 {
                     "mode": mode,
                     "component_type": component_type,
@@ -85,7 +84,7 @@ def _reconcile_editor_metadata(metadata: dict[str, Any], parsed: dict[str, Any])
                 },
             )
 
-        reconciled_pings.append({"keywords": keywords_meta})
+        reconciled_pings.append({"items": items_meta})
 
     return {
         "version": 1,
@@ -198,7 +197,7 @@ def _apply_candidate_raw(candidate_raw: str, reason: str = "save") -> dict[str, 
     config_path = get_config_path()
     previous_raw = get_raw_config()
 
-    parsed_candidate = json5.loads(candidate_raw)
+    parsed_candidate = json.loads(candidate_raw)
     _validate_discord_id_string_fields(parsed_candidate, reason=reason)  # pyright: ignore[reportArgumentType]
 
     _write_backup_snapshot(previous_raw=previous_raw, reason=reason)
@@ -572,10 +571,10 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:  # noqa: C9
 
                 elif action == "validate_raw":
                     raw = payload.get("raw", "")
-                    json5.loads(raw)
+                    json.loads(raw)
                     if not await _safe_ws_send_json(
                         ws,
-                        {"type": "validated", "message": "JSONC is valid."},
+                        {"type": "validated", "message": "JSON is valid."},
                     ):
                         break
 
@@ -586,7 +585,7 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:  # noqa: C9
                         ws,
                         {
                             "type": "saved",
-                            "message": "Saved raw JSONC and reloaded runtime config.",
+                            "message": "Saved raw JSON and reloaded runtime config.",
                             "raw": raw,
                             "parsed": parsed,
                         },
