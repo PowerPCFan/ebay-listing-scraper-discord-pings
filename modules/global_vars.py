@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from .config_tools import Config, GlobalBlocklist
 from .rolepicker_config_tools import RolePickerStates
 
@@ -11,3 +13,7 @@ scraper_paused: bool = False  # flag to pause scraper with commands at end of po
 
 last_scrape_time: float | None = None
 scraper_was_running: bool = False
+
+daily_api_date: str = datetime.now(UTC).date().isoformat()
+daily_api_calls_total: int = 0
+daily_api_endpoint_counts: dict[str, int] = {}

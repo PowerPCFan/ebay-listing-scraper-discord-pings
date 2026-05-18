@@ -114,16 +114,24 @@ def _save_editor_metadata(metadata: dict[str, Any], parsed: dict[str, Any]) -> d
 
 
 def _timestamp_for_backup_name() -> str:
-    return datetime.now(tz=UTC).strftime("%Y%m%d-%H%M%S")
+    return datetime.now(tz=UTC).strftime("%Y-%m-%d_%H-%M-%S")
 
 
-def _write_backup_snapshot(previous_raw: str, reason: str) -> Path:
+def _write_backup_snapshot(previous_raw: str, reason: str, version: str | None = None) -> Path:
     config_path = get_config_path()
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
     timestamp = _timestamp_for_backup_name()
     safe_reason = "".join(ch if ch.isalnum() else "-" for ch in reason).strip("-") or "save"
-    backup_name = f"{config_path.stem}-{timestamp}-{safe_reason}{config_path.suffix}"
+    version_part = ""
+    if version:
+        safe_version = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in version).strip(
+            "-",
+        )
+        if safe_version:
+            version_part = f"_v{safe_version}"
+
+    backup_name = f"{config_path.stem}_{timestamp}{version_part}_{safe_reason}{config_path.suffix}"
     backup_path = BACKUP_DIR / backup_name
 
     backup_path.write_text(previous_raw, encoding="utf-8")
@@ -131,7 +139,8 @@ def _write_backup_snapshot(previous_raw: str, reason: str) -> Path:
 
 
 def _validate_discord_id_string_fields(  # noqa: C901
-    candidate_data: dict[str, Any], reason: str = "save",
+    candidate_data: dict[str, Any],
+    reason: str = "save",
 ) -> None:
     if not isinstance(candidate_data, dict):
         msg = "Config root must be an object when validating Discord ID fields."
@@ -200,7 +209,9 @@ def _apply_candidate_raw(candidate_raw: str, reason: str = "save") -> dict[str, 
     parsed_candidate = json.loads(candidate_raw)
     _validate_discord_id_string_fields(parsed_candidate, reason=reason)  # pyright: ignore[reportArgumentType]
 
-    _write_backup_snapshot(previous_raw=previous_raw, reason=reason)
+    version_value = parsed_candidate.get("config_version")
+    version = str(version_value).strip() if version_value else None
+    _write_backup_snapshot(previous_raw=previous_raw, reason=reason, version=version)
     config_path.write_text(candidate_raw, encoding="utf-8")
 
     try:
@@ -232,7 +243,7 @@ def _build_export_json() -> str:
 def _write_global_blocklist_backup(previous_items: list[str]) -> Path:
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = _timestamp_for_backup_name()
-    backup_path = BACKUP_DIR / f"global_blocklist-{timestamp}-save.txt"
+    backup_path = BACKUP_DIR / f"global_blocklist_{timestamp}_save.txt"
     backup_path.write_text("\n".join(previous_items) + "\n", encoding="utf-8")
     return backup_path
 
@@ -550,6 +561,8 @@ async def _safe_ws_send_json(ws: web.WebSocketResponse, payload: dict[str, Any])
 
 
 async def ws_handler(request: web.Request) -> web.WebSocketResponse:  # noqa: C901, PLR0912, PLR0915
+    logger.debug("Incoming WebSocket connection")
+
     if not _is_editor_authenticated(request):
         raise web.HTTPUnauthorized(text="Config editor authentication required.")
 
@@ -564,6 +577,8 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:  # noqa: C9
             try:
                 payload = json.loads(msg.data)
                 action = payload.get("action")
+
+                logger.debug(f"Received WebSocket message with action `{action}`")
 
                 if action == "get_state":
                     if not await _safe_ws_send_json(ws, _ws_state_payload()):
@@ -743,6 +758,8 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:  # noqa: C9
 async def start_config_web_server(host: str = HOST, port: int = PORT) -> None:
     logger.info("Starting config editor...")
 
+    logger.debug("Setting up application, runner, and site...")
+
     app = web.Application()
     app.router.add_get("/", handle_index)
     app.router.add_post("/login", handle_login)
@@ -758,14 +775,14 @@ async def start_config_web_server(host: str = HOST, port: int = PORT) -> None:
     site = web.TCPSite(runner, host=host, port=port)
 
     try:
+        logger.debug("Starting web server...")
         await site.start()
         logger.info(f"Config editor running at http://{host}:{port}")
 
         stop_event = asyncio.Event()
         await stop_event.wait()
-
-    except Exception as exc:
-        logger.error(f"Failed to start config editor server on {host}:{port}: {exc}")
+    except Exception:
+        logger.exception(f"Failed to start config editor server on {host}:{port}")
     finally:
         with contextlib.suppress(Exception):
             await runner.cleanup()

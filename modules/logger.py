@@ -1,11 +1,12 @@
 # this file is a nightmare
 # fmt: off
-# ruff: noqa
+# ruff: noqa: E501, N816, N802, ARG002, ANN002, ANN003, TRY003, EM101, ASYNC230, Q000, PTH123, TRY301, ANN001, TRY400, PLW0603
 
-import logging
 import asyncio
-from datetime import datetime, timezone, timedelta
+import logging
+from datetime import UTC, datetime
 from pathlib import Path
+
 from . import global_vars as gv
 from . import webhook_sender
 
@@ -28,12 +29,13 @@ LIGHT_CYAN = f"{ANSI}96m"
 SUPER_LIGHT_CYAN = f"{ANSI}38;5;153m"
 ORANGE = f"{ANSI}38;5;208m"
 
+DEBUG_GRAY = f"{ANSI}90m"
+
 
 class Logger(logging.Formatter):
     def __init__(self) -> None:
         super().__init__()
-        self._format = "[ %(levelname)s ]    %(message)s    [%(asctime)s (%(filename)s:%(funcName)s)]"
-        self.utc_minus_5 = timezone(timedelta(hours=-5))
+        self._format = f"[ %(levelname)s ]   %(message)s   {DEBUG_GRAY}[%(asctime)s (%(filename)s:%(funcName)s)]{RESET}"
 
         self.FORMATS = {
             logging.DEBUG: self._format,
@@ -44,12 +46,14 @@ class Logger(logging.Formatter):
         }
 
     def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
-        return datetime.fromtimestamp(record.created, tz=self.utc_minus_5).strftime("%m/%d/%Y %H:%M:%S")
+        return datetime.fromtimestamp(record.created).astimezone().strftime("%m/%d/%Y %H:%M:%S %Z")
 
     def format(self, record: logging.LogRecord) -> str:
         record.levelname = record.levelname.center(8)
 
         match record.levelno:
+            case logging.DEBUG:
+                record.levelname = f"{DEBUG_GRAY}{record.levelname}{RESET}"
             case logging.INFO:
                 record.levelname = f"{GREEN}{record.levelname}{RESET}"
             case logging.WARNING:
@@ -72,11 +76,10 @@ fmt = Logger()
 class FileLogger(logging.Formatter):
     def __init__(self) -> None:
         super().__init__()
-        self._format = "[ %(levelname)s ]    %(message)s    [%(asctime)s (%(filename)s:%(funcName)s)]"
-        self.utc_minus_5 = timezone(timedelta(hours=-5))
+        self._format = "[ %(levelname)s ]   %(message)s   [%(asctime)s (%(filename)s:%(funcName)s)]"
 
     def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
-        return datetime.fromtimestamp(record.created, tz=self.utc_minus_5).strftime("%m/%d/%Y %H:%M:%S")
+        return datetime.fromtimestamp(record.created, tz=UTC).strftime("%m/%d/%Y %H:%M:%S UTC")
 
     def format(self, record: logging.LogRecord) -> str:
         rc = logging.makeLogRecord(record.__dict__)
@@ -92,26 +95,31 @@ class CustomLogger:
         self.base_logger: logging.Logger = base_logger
 
     def debug(self, msg: str, *args, **kwargs) -> None:
-        # commented out bcz log level handles this + it prevents logging debug to file when debug_mode is off
-        # if config.debug_mode:
+        kwargs.setdefault("stacklevel", 2)
         return self.base_logger.debug(msg, *args, **kwargs)
 
     def info(self, msg: str, *args, **kwargs) -> None:
+        kwargs.setdefault("stacklevel", 2)
         return self.base_logger.info(msg, *args, **kwargs)
 
     def warning(self, msg: str, *args, **kwargs) -> None:
+        kwargs.setdefault("stacklevel", 2)
         return self.base_logger.warning(msg, *args, **kwargs)
 
     def error(self, msg: str, *args, **kwargs) -> None:
+        kwargs.setdefault("stacklevel", 2)
         return self.base_logger.error(msg, *args, **kwargs)
 
     def critical(self, msg: str, *args, **kwargs) -> None:
+        kwargs.setdefault("stacklevel", 2)
         return self.base_logger.critical(msg, *args, **kwargs)
 
     def exception(self, msg: str, *args, **kwargs) -> None:
+        kwargs.setdefault("stacklevel", 2)
         return self.base_logger.exception(msg, *args, **kwargs)
 
     def log(self, level: int, msg: str, *args, **kwargs) -> None:
+        kwargs.setdefault("stacklevel", 2)
         return self.base_logger.log(level, msg, *args, **kwargs)
 
     @property
@@ -135,8 +143,10 @@ class CustomLogger:
 
         for handler in self.base_logger.handlers:
             if isinstance(handler, DiscordWebhookHandler):
+                if handler.message_queue is None:
+                    continue
+
                 try:
-                    assert handler.message_queue is not None
                     await handler.message_queue.put("_ _")
                     return
                 except Exception:
@@ -197,7 +207,7 @@ class FileLoggingHandler(logging.Handler):
 
                 self.message_queue.task_done()
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except Exception as e:
                 print(f"[ ERROR ] File logging worker error: {e}")
@@ -205,10 +215,10 @@ class FileLoggingHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             level_name = logging.getLevelName(record.levelno).center(8)
-            asctime = datetime.fromtimestamp(record.created).strftime("%m/%d/%Y %H:%M:%S")
+            asctime = datetime.fromtimestamp(record.created, tz=UTC).strftime("%m/%d/%Y %H:%M:%S UTC")
             message = record.getMessage()
 
-            content = f"[ {level_name} ]    {message}    [{asctime} ({record.filename}:{record.funcName})]"
+            content = f"[ {level_name} ]   {message}   [{asctime} ({record.filename}:{record.funcName})]"
 
             if self.worker_task is None:
                 self._start_worker()
@@ -259,7 +269,7 @@ _base_logger.addHandler(handler)
 if gv.config.file_logging:
     try:
         log_dir = Path(__file__).parent.parent / "logs"
-        log_file_path = log_dir / f"debug-log-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.log"
+        log_file_path = log_dir / f"debug_log_{datetime.now(UTC).strftime('%Y-%m-%d_%H-%M-%S')}.log"
 
         file_handler = FileLoggingHandler(str(log_file_path))
         file_handler.setLevel(logging.DEBUG)  # Always log all levels to file
@@ -314,7 +324,7 @@ class DiscordWebhookHandler(logging.Handler):
 
                 self.message_queue.task_done()
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except Exception as e:
                 print(f"[ ERROR ] Discord webhook worker error: {e}")
@@ -322,24 +332,14 @@ class DiscordWebhookHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             level_name = logging.getLevelName(record.levelno)
-            asctime = datetime.fromtimestamp(record.created).strftime("%y/%m/%d %H:%M:%S")
+            asctime = datetime.fromtimestamp(record.created, tz=UTC).strftime("%H:%M:%S UTC")
             message = record.getMessage()
 
-            ping_content = ""
+            content = f"```[ {level_name} ]  {message}  [{asctime} ({record.filename}:{record.funcName})]```"
 
-            if gv.config.ping_for_warnings:
-                if self.ping_webhook and record.levelno >= logging.WARNING:
-                    ping_content = f"{self.ping_webhook} "
-            else:
-                if self.ping_webhook and record.levelno >= logging.ERROR:
-                    ping_content = f"{self.ping_webhook} "
-
-            content = (
-                f"{ping_content}\n"
-                f"```\n"
-                f"[ {level_name} ]    {message}    [{asctime} ({record.filename}:{record.funcName})]\n"
-                f"```"
-            )
+            levelthingy = logging.WARNING if gv.config.ping_for_warnings else logging.ERROR
+            if self.ping_webhook and record.levelno >= levelthingy:
+                content = f"{content}\n-# {self.ping_webhook}"
 
             global _discord_webhook_send_count
             _discord_webhook_send_count += 1
@@ -380,35 +380,16 @@ class DiscordWebhookHandler(logging.Handler):
 
 
 def _has_discord_handler(logr) -> bool:
-    handlers = getattr(logr, 'handlers', [])
-    for h in handlers:
-        if isinstance(h, DiscordWebhookHandler):
-            return True
-    return False
+    return any(isinstance(h, DiscordWebhookHandler) for h in getattr(logr, 'handlers', []))
 
 
 if gv.config.logger_webhook and not _has_discord_handler(logger):
     try:
         discord_handler = DiscordWebhookHandler(
             gv.config.logger_webhook,
-            f"<@{str(gv.config.logger_webhook_ping)}>" if gv.config.logger_webhook_ping else None
+            f"<@{gv.config.logger_webhook_ping!s}>" if gv.config.logger_webhook_ping else None,
         )
         discord_handler.setLevel(DISCORD_WEBHOOK_MIN_LEVEL)
         logger.addHandler(discord_handler)
     except Exception:
         logger.error("Failed to add Discord webhook handler to logger!")
-        pass
-
-
-class SillyCombinedHandlerThingy(logging.Handler):
-    def __init__(self, handlers: list[logging.Handler]) -> None:
-        super().__init__()
-        self.handlers = [handler for handler in handlers if handler is not None and handler is not self]
-
-    def emit(self, record):
-        for h in self.handlers:
-            if record.levelno >= h.level:
-                h.emit(record)
-
-
-silly_combined_handler_thingy = SillyCombinedHandlerThingy(logger.handlers)

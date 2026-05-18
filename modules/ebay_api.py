@@ -1,5 +1,7 @@
 import base64
+import json
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -22,31 +24,25 @@ from .enums import (
 from .logger import logger
 from .utils import iso_to_unix_timestamp
 
-if gv.config.log_api_responses:
-    import json
-    from datetime import datetime
-else:
-    json = None
-    datetime = None
-
-
-json_datetime_alert = "\n".join(
-    [
-        "Something went wrong, information:",
-        "The JSON and Datetime modules are only imported when gv.config.log_api_responses is True.",
-        "This function should only be called when gv.config.log_api_responses is True.",
-        "However, it somehow was called when gv.config.log_api_responses is False, leading to the module being missing.",  # noqa: E501
-        "This is likely a bug in the code, if you are the developer fix this, and if you are a user report this on GitHub.",  # noqa: E501
-        "(Also a reminder that this isn't really designed to be a user-facing tool, it's a project that I wrote for myself so there aren't any docs and stuffs)",  # noqa: E501
-    ],
-)
-
-
 _token_cache: str | None = None
 _token_expires_at: int = 0
 _http_client: httpx.AsyncClient | None = None
 
 api_url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
+
+
+def _record_api_call(endpoint_label: str) -> None:
+    today = datetime.now(UTC).date().isoformat()
+
+    if gv.daily_api_date != today:
+        gv.daily_api_date = today
+        gv.daily_api_calls_total = 0
+        gv.daily_api_endpoint_counts = {}
+
+    gv.daily_api_calls_total += 1
+    gv.daily_api_endpoint_counts[endpoint_label] = (
+        gv.daily_api_endpoint_counts.get(endpoint_label, 0) + 1
+    )
 
 
 async def get_http_client() -> httpx.AsyncClient:
@@ -63,11 +59,12 @@ async def close_http_client() -> None:
         _http_client = None
 
 
-def _get_response_json_filename(api_source: str) -> Path:
-    if datetime is None:
-        raise RuntimeError(json_datetime_alert)
+def _get_response_json_filename(api_source: str) -> Path | None:
+    if not gv.config.log_api_responses:
+        return None
+
     directory = Path(__file__).parent.parent / "responses" / (("".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in api_source).strip("-")) or "unknown")  # noqa: E501
-    path = directory / f"response-{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
+    path = directory / f"response-{datetime.now(UTC).strftime('%Y-%m-%d_%H-%M-%S')}.json"
 
     directory.mkdir(exist_ok=True, parents=True)
     path.touch(exist_ok=True)
@@ -293,6 +290,7 @@ async def get_valid_token() -> str | None:
         ).decode()
 
         client = await get_http_client()
+        _record_api_call("POST /identity/v1/oauth2/token")
         response = await client.post(
             "https://api.ebay.com/identity/v1/oauth2/token",
             headers={
@@ -347,11 +345,14 @@ def _get_browse_headers(token: str) -> dict[str, str]:
 def _log_response_json(response: httpx.Response, api_source: str) -> None:
     if not gv.config.log_api_responses:
         return
-    if not json:
-        raise RuntimeError(json_datetime_alert)
 
     parsed = response.json()
-    with _get_response_json_filename(api_source).open(mode="w", encoding="utf-8") as f:
+
+    filename = _get_response_json_filename(api_source)
+    if not filename:
+        return
+
+    with filename.open(mode="w", encoding="utf-8") as f:
         logger.debug("Writing response to file for debugging purposes...")
         json.dump(parsed, f, indent=4, ensure_ascii=False)
         logger.debug("Done.")
@@ -369,6 +370,7 @@ class EbayBrowseSummaryApi:
             return []
 
         gv.api_call_count += 1
+        _record_api_call(f"GET /buy/browse/v1/item_summary/search [{self.source_name}]")
         client = await get_http_client()
         response = await client.get(api_url, params=params, headers=_get_browse_headers(token))
 

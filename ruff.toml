@@ -47,6 +47,8 @@ ignore = [
     "TRY300",  # Checks for return statements in try blocks - this is really annoying lol
     "RET505",  # Checks for elif/else after a return statement - this is also annoying
     "FLY002",  # Checks for str.join calls and tries to replace with f-strings - not a great suggestion in most cases
+    "FIX002",  # Tells you to resolve TODOs (true, but ion want a "problem" showing just bcz I haven't fixed/added smth)
+    "TD003",   # Asks you to provide an issue link in a TODO (I don't necessarily have issues to link)
 ]
 
 fixable = ["ALL"]

@@ -1,14 +1,5 @@
-- I removed query mode because I don't like it really and it wastes API calls, but also there's the chance that the listing title wouldn't contain the keyword but the description would, so maybe I should re-add it with that in mind? Or somehow get the description in the current mode? (That would probably require calls for each listing though which would be super expensive since the endpoint for getting listing details shares a rate limit with the endpoint for searching listings, however I'm pretty sure it supports batching: `https://api.ebay.com/buy/browse/v1/item?item_ids=<id1>,<id2>,...` so it would basically just be one extra call, idk i'll consider it)
-  - example of this: ssds are pretty hard to match since even with an advanced regex query searching for stuff like 500gb tends to match laptops / prebuilts too, if i re-implemented support for ebay's search feature then i could just query "500gb nvme ssd" or something and ebay's much smarter searching system knows (for the most part) what listings are actually SSDs and what listings are not, and then i could do the same price and deal matching stuff on those results
-  - or i could just re-add it as it was before and only use it for "hot items" and/or items that are harder to filter with regex - ssds are a big one due to prebuilts and laptops also containing "1TB NVMe SSD" or simmilar in the title
 - add priority listings that poll more often
-- improve seller flagging system
-- stop debug logs from going to discord (i thought i did that before lol)
-  - fix logging in general its so messy
-- fix weird 404s on commands--unknown interaction error 10062 when reloading config with command--i remember this used to happen but retrying command would fix, now its totally broken it seems
 - implement filters on api, like `price:[min..max]`, `conditionIds:{1000|1500|...}`, `itemLocationCountry:US`, `excludeCategoryIds:{...}`, `deliveryCountry:US`, `sort` values
 - config editor:
-  - work on deal slider thing
-  - add back buttons to shift up/down all prices per keyword
-  - add some validation especially for prices, e.g. if target price > max price
-    - for this maybe it could just be an automatic thing like if you set target to 90 while max is 80 itll automatically change max to 91, or something like that idk
+  - deal slider handles slightly misaligned - one fix i did improved it slightly but still not ideal
+  - color scheme for deals is a bit weird

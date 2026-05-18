@@ -37,11 +37,12 @@ async def match(bot: "EbayScraperBot") -> None:
                 logger.info("Currently within sleep hours, skipping current interval.")
 
                 if gv.config.sleep_hours:
+                    # convert config time (can be in any timezone) to local time for display
                     end = datetime.fromisoformat(
                         f"1970-01-01T{gv.config.sleep_hours.end}",
-                    ).strftime("%H:%M %Z")
+                    ).astimezone().strftime("%I:%M %p (%Z)")
                 else:
-                    end = None
+                    end = "<unknown time> (!!! config error !!!)"
 
                 await change_status(
                     bot=bot,
@@ -476,7 +477,7 @@ def matches_ping_criteria(  # noqa: C901, PLR0912, PLR0915
                 query=matching_mode_and_query[1] if matching_mode_and_query and matching_mode_and_query[1] else None,  # noqa: E501
             )
 
-    if is_globally_blocked(title_lower, "", "") and not matches_blocklist_override(
+    if is_globally_blocked(title_lower) and not matches_blocklist_override(
         title_lower,
         override_patterns=ping_config.blocklist_override,
     ):

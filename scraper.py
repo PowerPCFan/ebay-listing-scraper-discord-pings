@@ -7,6 +7,7 @@ import sys
 from modules import ebay_api
 from modules import global_vars as gv
 from modules.bot import bot as discord_bot
+from modules.command_listener import CommandListener
 from modules.config_web_server import start_config_web_server
 from modules.logger import logger
 
@@ -19,6 +20,15 @@ async def start_discord_bot() -> None:
     await discord_bot.start(gv.config.discord_bot_token)
 
 
+async def start_command_listener() -> None:
+    """Starts the command listener."""
+
+    logger.info("Starting stdin command listener...")
+
+    listener = CommandListener(":")
+    await listener.start()
+
+
 async def run_main() -> None:
     """
     Starts the main components of the app
@@ -26,6 +36,7 @@ async def run_main() -> None:
 
     tasks = []
 
+    tasks.append(asyncio.create_task(start_command_listener()))
     tasks.append(asyncio.create_task(start_discord_bot()))
     tasks.append(asyncio.create_task(start_config_web_server()))
 

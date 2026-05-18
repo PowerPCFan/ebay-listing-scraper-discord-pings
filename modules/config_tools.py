@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Self, overload
+from typing import Any, Self, overload
 
 from .enums import Deal, DealRanges, DealTuple, KeywordMode
 
@@ -288,6 +288,8 @@ class Config:
     config_editor_password: str | None = None
     config_editor_host: str | None = None
     config_editor_port: int | None = None
+    config_version: str = "1.0.0"
+    changelog: list[dict[str, Any]] = field(default_factory=list)
 
     @overload
     @staticmethod
@@ -347,6 +349,8 @@ class Config:
             "condition_blocklist": self.condition_blocklist,
             "pings": [ping.to_dict() for ping in self.pings],
             "self_roles": [group.to_dict() for group in self.self_roles],
+            "config_version": self.config_version,
+            "changelog": self.changelog,
         }
 
         if self.logger_webhook is not None:
@@ -379,6 +383,8 @@ class Config:
         pings_data = data.pop("pings", [])
         self_roles_data = data.pop("self_roles", [])
         sleep_hours_data = data.pop("sleep_hours", None)
+        config_version_data = data.pop("config_version", "1.0.0")
+        changelog_data: list[dict[str, Any]] = list(data.pop("changelog", []))
 
         pings: list[PingConfig] = [PingConfig.from_dict(pd) for pd in pings_data]
         self_roles: list[SelfRoleGroup] = []
@@ -396,11 +402,24 @@ class Config:
         if sleep_hours_data:
             sleep_hours = SleepHours.from_dict(sleep_hours_data)
 
+        config_version = str(config_version_data).strip() if config_version_data else "1.0.0"
+        if not config_version:
+            config_version = "1.0.0"
+
+        changelog: list[dict[str, Any]] = [e.copy() for e in changelog_data]
+
         for key in ["discord_guild_id", "admin_role_id", "logger_webhook_ping"]:
             if key in data:
                 data[key] = Config.to_int(data[key])
 
-        return cls(pings=pings, self_roles=self_roles, sleep_hours=sleep_hours, **data)
+        return cls(
+            pings=pings,
+            self_roles=self_roles,
+            sleep_hours=sleep_hours,
+            config_version=config_version,
+            changelog=changelog,
+            **data,
+        )
 
     @staticmethod
     def from_json(json_str: str) -> "Config":
@@ -423,6 +442,8 @@ class Config:
         pings_data = data.pop("pings", [])
         self_roles_data = data.pop("self_roles", [])
         sleep_hours_data = data.pop("sleep_hours", None)
+        config_version_data = str(data.pop("config_version", "1.0.0"))
+        changelog_data: list[dict[str, Any]] = list(data.pop("changelog", []))
 
         pings: list[PingConfig] = [PingConfig.from_dict(pd) for pd in pings_data]
         self_roles: list[SelfRoleGroup] = []
@@ -440,11 +461,22 @@ class Config:
         if sleep_hours_data:
             sleep_hours = SleepHours.from_dict(sleep_hours_data)
 
+        config_version = str(config_version_data).strip() or "1.0.0"
+
+        changelog: list[dict[str, Any]] = [e.copy() for e in changelog_data]
+
         for key in ["discord_guild_id", "admin_role_id", "logger_webhook_ping"]:
             if key in data:
                 data[key] = Config.to_int(data[key])
 
-        return Config(pings=pings, self_roles=self_roles, sleep_hours=sleep_hours, **data)
+        return Config(
+            pings=pings,
+            self_roles=self_roles,
+            sleep_hours=sleep_hours,
+            config_version=config_version,
+            changelog=changelog,
+            **data,
+        )
 
 
 def reload_config() -> Config:

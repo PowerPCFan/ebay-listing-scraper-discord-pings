@@ -1,10 +1,10 @@
-# ruff: noqa: COM812, E501, DTZ901
+# ruff: noqa: COM812, E501
 
 import asyncio
 import logging
 import math
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Literal, cast
 from urllib.parse import quote
 
@@ -43,6 +43,39 @@ from .utils import (
 def custom_dedent(text: str, spaces: int) -> str:
     lst = [line[spaces:] if line.startswith(" " * spaces) else line for line in text.splitlines()]
     return "\n".join(lst)
+
+
+def _get_active_seconds_per_day() -> tuple[float, str]:
+    # TODO @PowerPCFan: make this less janky
+
+    secs_per_day = 24 * 60 * 60
+
+    if not gv.config.sleep_hours:
+        return float(secs_per_day), "Disabled"
+
+    try:
+        iso_start = f"1970-01-01T{gv.config.sleep_hours.start}"
+        iso_end = f"1970-01-01T{gv.config.sleep_hours.end}"
+
+        if len(iso_start) != 22 or len(iso_end) != 22 or iso_start[16:22] != iso_end[16:22]:  # noqa: PLR2004
+            logger.warning("One or more of your sleep hours have invalid timezone data. Ignoring sleep hours in calculation.")
+            return float(secs_per_day), "Invalid config (ignored)"
+
+        start = datetime.fromisoformat(iso_start)
+        end = datetime.fromisoformat(iso_end)
+
+        if start == end:
+            return 0.0, f"`{gv.config.sleep_hours.start}` to `{gv.config.sleep_hours.end}`"
+
+        start = start.astimezone(UTC).timestamp()
+        end = end.astimezone(UTC).timestamp()
+
+        eep_time = end - start if start <= end else (end + secs_per_day) - start
+
+        return max(0.0, float(secs_per_day - eep_time)), f"`{gv.config.sleep_hours.start}` to `{gv.config.sleep_hours.end}`"
+    except Exception:
+        logger.warning("Failed to parse sleep hours for API call estimation. Ignoring sleep hours in calculation.")
+        return float(secs_per_day), "Invalid config (ignored)"
 
 
 class NotificationToggleButton(discord.ui.Button):
@@ -188,7 +221,7 @@ class ListingButtonView(discord.ui.View):
 
 class EbayScraperBot(commands.Bot):
     def __init__(self) -> None:
-        self._scraper_running = False
+        self.scraper_running = False
         self._persistent_views: dict[int, dict] = {}
 
         intents = discord.Intents.default()
@@ -371,13 +404,13 @@ class EbayScraperBot(commands.Bot):
     async def start_scraper(self) -> bool:
         """Starts the eBay scraper, if it's not already running"""
 
-        if self._scraper_running:
+        if self.scraper_running:
             logger.warning("Scraper is already running!")
             return False
 
         logger.info("Starting eBay monitoring...")
 
-        self._scraper_running = True
+        self.scraper_running = True
         gv.scraper_was_running = True
 
         await change_status(bot=self, logger=logger, message="Starting scraper...")
@@ -942,79 +975,43 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
         description="Estimate the number of eBay API calls made per day based on current config",
     )
     @commands.is_owner()
-    async def estimate_daily_api_calls_command(  # noqa: C901, PLR0912, PLR0915
+    async def estimate_daily_api_calls_command(
         interaction: discord.Interaction, ephemeral: bool = False
     ) -> None:
         try:
-            all_poll_categories = set()
-            query_search_calls_per_poll = 0
+            unique_poll_categories: set[int] = set()
+            query_calls_per_poll = 0
+            pings_with_poll_mode = 0
+            pings_with_query_mode = 0
 
             for ping in gv.config.pings:
+                ping_has_poll_item = False
+                ping_has_query_item = False
                 for item in ping.items:
                     mode = item.keyword.mode.value
                     if mode == "poll":
-                        all_poll_categories.update(ping.categories)
+                        ping_has_poll_item = True
+                        unique_poll_categories.update(ping.categories)
                     elif mode == "query":
-                        query_search_calls_per_poll += len(ping.categories)
+                        ping_has_query_item = True
+                        query_calls_per_poll += len(ping.categories)
 
-            poll_summary_calls_per_poll = len(all_poll_categories)
-            poll_interval_seconds = gv.config.poll_interval_seconds
+                if ping_has_poll_item:
+                    pings_with_poll_mode += 1
+                if ping_has_query_item:
+                    pings_with_query_mode += 1
 
-            seconds_per_day = 24 * 60 * 60
-
-            active_seconds_per_day = seconds_per_day
-
-            if gv.config.sleep_hours:
-                try:
-                    start_dt = datetime.fromisoformat(
-                        f"1970-01-01T{gv.config.sleep_hours.start}:00"
-                    )
-                    end_dt = datetime.fromisoformat(f"1970-01-01T{gv.config.sleep_hours.end}:00")
-
-                    start_time = start_dt.timetz()
-                    end_time = end_dt.timetz()
-
-                    if start_time <= end_time:
-                        # Same day sleep period
-                        start_datetime = datetime.combine(
-                            datetime.min, start_time.replace(tzinfo=None)
-                        )
-                        end_datetime = datetime.combine(datetime.min, end_time.replace(tzinfo=None))
-                        sleep_timedelta = end_datetime - start_datetime
-                        sleep_duration = sleep_timedelta.total_seconds()
-                    else:
-                        # Sleep period crosses midnight
-                        start_datetime = datetime.combine(
-                            datetime.min, start_time.replace(tzinfo=None)
-                        )
-                        end_datetime = datetime.combine(datetime.min, end_time.replace(tzinfo=None))
-                        midnight = datetime.combine(
-                            datetime.min + timedelta(days=1), datetime.min.time()
-                        )
-                        sleep_timedelta = (midnight - start_datetime) + (
-                            end_datetime - datetime.combine(datetime.min, datetime.min.time())
-                        )
-                        sleep_duration = sleep_timedelta.total_seconds()
-
-                    active_seconds_per_day = seconds_per_day - sleep_duration
-                except Exception:
-                    logger.warning(
-                        "Failed to parse sleep hours for API call estimation. Ignoring sleep hours in calculation."
-                    )
+            poll_summary_calls_per_poll = len(unique_poll_categories)
+            poll_interval_seconds = max(1, gv.config.poll_interval_seconds)
+            active_seconds_per_day, sleep_display = _get_active_seconds_per_day()
 
             polls_per_day = active_seconds_per_day / poll_interval_seconds
             poll_summary_calls_per_day = polls_per_day * poll_summary_calls_per_poll
-            query_search_calls_per_day = polls_per_day * query_search_calls_per_poll
+            query_search_calls_per_day = polls_per_day * query_calls_per_poll
             api_calls_per_day = poll_summary_calls_per_day + query_search_calls_per_day
 
             minutes_between_polls = poll_interval_seconds / 60
             active_hours_per_day = active_seconds_per_day / 3600
-            sleep_display = "Disabled"
-            if gv.config.sleep_hours:
-                sleep_display = (
-                    f"{gv.config.sleep_hours.start[:-6]} to {gv.config.sleep_hours.end[:-6]} "
-                    f"(UTC {gv.config.sleep_hours.start[-6:]})"
-                )
 
             embed = discord.Embed(
                 title="API Call Estimates",
@@ -1027,13 +1024,16 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
                     f"- Active hours/day: **{active_hours_per_day:.1f}h**\n"
                     f"- Sleep hours: **{sleep_display}**\n"
                     f"- Minutes between polls: **{minutes_between_polls:.1f}**\n"
-                    f"- Polls/day: **{polls_per_day:.1f}**"
+                    f"- Polls/day: **{polls_per_day:.1f}**\n"
+                    f"- Ping configs: **{len(gv.config.pings)}**"
                 ),
                 inline=False,
             )
             embed.add_field(
                 name="Poll Mode",
                 value=(
+                    f"- Pings with poll items: **{pings_with_poll_mode}**\n"
+                    f"- Unique categories polled: **{poll_summary_calls_per_poll}**\n"
                     f"- Summary calls/poll: **{poll_summary_calls_per_poll}**\n"
                     f"- Summary calls/day: **{poll_summary_calls_per_day:.0f}**"
                 ),
@@ -1042,7 +1042,8 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
             embed.add_field(
                 name="Query Mode",
                 value=(
-                    f"- Query calls/poll: **{query_search_calls_per_poll}**\n"
+                    f"- Pings with query items: **{pings_with_query_mode}**\n"
+                    f"- Query calls/poll: **{query_calls_per_poll}**\n"
                     f"- Query calls/day: **{query_search_calls_per_day:.0f}**"
                 ),
                 inline=True,
@@ -1050,7 +1051,7 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
             embed.add_field(
                 name="Total",
                 value=(
-                    f"- API calls/poll: **{poll_summary_calls_per_poll + query_search_calls_per_poll}**\n"
+                    f"- API calls/poll: **{poll_summary_calls_per_poll + query_calls_per_poll}**\n"
                     f"- API calls/day: **{api_calls_per_day:.0f}**"
                 ),
                 inline=False,
@@ -1092,6 +1093,54 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
                 ),
                 ephemeral=ephemeral,
             )
+
+    @bot.tree.command(
+        name="daily-calls",
+        description="Show today's API calls and endpoint breakdown",
+    )
+    @commands.is_owner()
+    async def daily_calls_command(interaction: discord.Interaction, ephemeral: bool = True) -> None:
+        today = datetime.now(UTC).date().isoformat()
+        if gv.daily_api_date != today:
+            gv.daily_api_date = today
+            gv.daily_api_calls_total = 0
+            gv.daily_api_endpoint_counts = {}
+
+        endpoint_counts = gv.daily_api_endpoint_counts
+        sorted_endpoints = sorted(endpoint_counts.items(), key=lambda item: item[1], reverse=True)
+
+        embed = discord.Embed(
+            title="Daily API Calls",
+            color=discord.Color.blurple(),
+            timestamp=discord.utils.utcnow(),
+        )
+        embed.add_field(
+            name="Summary",
+            value=(
+                f"- Date: **{gv.daily_api_date}**\n"
+                f"- Total calls: **{gv.daily_api_calls_total}**\n"
+                f"- Distinct endpoints: **{len(endpoint_counts)}**"
+            ),
+            inline=False,
+        )
+
+        if sorted_endpoints:
+            lines = [f"- `{endpoint}`: **{count}**" for endpoint, count in sorted_endpoints[:25]]
+            embed.add_field(name="Endpoints", value="\n".join(lines), inline=False)
+            if len(sorted_endpoints) > 25:  # noqa: PLR2004
+                embed.add_field(
+                    name="More",
+                    value=f"{len(sorted_endpoints) - 25} additional endpoints not shown.",
+                    inline=False,
+                )
+        else:
+            embed.add_field(
+                name="Endpoints",
+                value="No API calls have been recorded today.",
+                inline=False,
+            )
+
+        await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @bot.tree.command(name="ping", description="Measure bot latency")
     async def ping_command(interaction: discord.Interaction) -> None:

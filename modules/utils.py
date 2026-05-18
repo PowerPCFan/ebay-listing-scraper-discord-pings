@@ -53,33 +53,32 @@ def is_within_sleep_hours() -> bool:
         return False
 
     try:
-        start_str = gv.config.sleep_hours.start
-        end_str = gv.config.sleep_hours.end
+        now = datetime.now(UTC).timetz()
+        start = (
+            datetime.fromisoformat(f"1970-01-01T{gv.config.sleep_hours.start}")
+            .astimezone(UTC)
+            .timetz()
+        )
+        end = (
+            datetime.fromisoformat(f"1970-01-01T{gv.config.sleep_hours.end}")
+            .astimezone(UTC)
+            .timetz()
+        )
 
-        start_dt = datetime.fromisoformat(f"1970-01-01T{start_str}")
-        end_dt = datetime.fromisoformat(f"1970-01-01T{end_str}")
-
-        now_utc = datetime.now(UTC)
-        now_in_sleep_tz = now_utc.astimezone(start_dt.tzinfo)
-
-        current_time = now_in_sleep_tz.timetz()
-        start_time = start_dt.timetz()
-        end_time = end_dt.timetz()
-
-        if start_time <= end_time:
-            return start_time <= current_time <= end_time
+        if start <= end:
+            return start <= now <= end
         else:
-            return current_time >= start_time or current_time <= end_time
+            return now >= start or now <= end
     except (ValueError, TypeError):
         logger.exception("Invalid sleep_hours format. Expected HH:MM+/-HH:MM (e.g., '23:00-05:00')")
         return True
 
 
-def is_globally_blocked(content: str, extra1: str = "", extra2: str = "") -> bool:
+def is_globally_blocked(content: str) -> bool:
     if not gv.global_blocklist.items:
         return False
 
-    content_to_check = f"{content} {extra1} {extra2}".lower().strip()
+    content_to_check = str(content).lower().strip()
 
     for blocked_pattern in gv.global_blocklist.items:
         if matches_pattern(content_to_check, blocked_pattern):
@@ -90,14 +89,12 @@ def is_globally_blocked(content: str, extra1: str = "", extra2: str = "") -> boo
 
 def matches_blocklist_override(
     content: str,
-    extra1: str = "",
-    extra2: str = "",
     override_patterns: list[str] | None = None,
 ) -> bool:
     if not override_patterns:
         return False
 
-    content_to_check = f"{content} {extra1} {extra2}".lower().strip()
+    content_to_check = str(content).lower().strip()
 
     for override_pattern in override_patterns:
         if matches_pattern(content_to_check, override_pattern):
@@ -147,7 +144,7 @@ def get_listing_type_display(buying_options: BuyingOptions) -> str:
 
 
 def iso_to_unix_timestamp(iso_string: str) -> int:
-    return int(datetime.fromisoformat(iso_string).replace(tzinfo=UTC).timestamp())
+    return int(datetime.fromisoformat(iso_string).astimezone(UTC).timestamp())
 
 
 def generate_shipping_string(shipping: ShippingOption) -> str:
@@ -285,12 +282,15 @@ async def change_status(
         if logger:
             logger.exception("Failed to change Discord presence:")
 
+
 class SellerRiskContext(NamedTuple):
     feedback_score: float | None
     positive_feedback: float | None
     title: str
 
+
 SellerRiskRule = Callable[[SellerRiskContext], str | None]
+
 
 def determine_risk(  # noqa: C901
     feedback_score: float | None,

@@ -483,6 +483,33 @@ textarea.invalid {
   gap: 6px;
 }
 
+.keyword-bulk-adjust {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+}
+
+.keyword-shift-input {
+  width: 54px;
+  text-align: center;
+}
+
+.keyword-bulk-buttons {
+  display: inline-flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.keyword-shift-btn {
+  line-height: 1;
+  border-radius: 10px;
+  padding: 0;
+  font-size: 0.75rem;
+  width: 32px;
+  height: 16px;
+}
+
 .tier-editor {
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -508,12 +535,12 @@ textarea.invalid {
     #64748b var(--p0),
     #dc2626 var(--p0),
     #dc2626 var(--p1),
-    #ea580c var(--p1),
-    #ea580c var(--p2),
+    #16a34a var(--p1),
+    #16a34a var(--p2),
     #ca8a04 var(--p2),
     #ca8a04 var(--p3),
-    #65a30d var(--p3),
-    #65a30d var(--p4),
+    #ea580c var(--p3),
+    #ea580c var(--p4),
     #64748b var(--p4),
     #64748b 100%
   );
@@ -559,8 +586,10 @@ textarea.invalid {
 
 .tier-handle {
   position: absolute;
-  inset: 0;
-  width: 100%;
+  top: 0;
+  bottom: 0;
+  left: -11px;
+  width: calc(100% + 22px);
   margin: 0;
   -webkit-appearance: none;
   appearance: none;

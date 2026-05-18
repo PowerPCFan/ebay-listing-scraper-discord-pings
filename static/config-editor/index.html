@@ -88,6 +88,15 @@
         <!-- Settings will be rendered here -->
       </div>
 
+      <section class="surface nested card">
+        <header class="card-head">
+          <h2>Config Changelog</h2>
+        </header>
+        <div id="changelogContainer" class="list-editor-container">
+          <!-- Full changelog will be rendered here -->
+        </div>
+      </section>
+
       <div class="save-dock">
         <button id="btnSaveSettings" class="primary" disabled>All Changes Saved</button>
         <button id="btnDiscardSettings" class="danger" style="display: none;">Discard Changes</button>
@@ -271,7 +280,33 @@
       <pre id="saveDiffPre" class="save-diff-pre"></pre>
       <div class="button-row modal-actions">
         <button id="btnSaveDiffCancel" class="tonal">Cancel</button>
-        <button id="btnSaveDiffConfirm" class="primary">Save</button>
+        <button id="btnSaveDiffConfirm" class="primary">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="saveVersionOverlay" class="modal-overlay" aria-hidden="true">
+    <div id="saveVersionModal" class="modal surface" role="dialog" aria-modal="true">
+      <h2>Version This Change</h2>
+      <p class="hint">Choose version level and add a short changelog note.</p>
+      <div class="grid">
+        <div class="field">
+          <label for="versionLevel">Change Level</label>
+          <select id="versionLevel">
+            <option value="patch">Patch</option>
+            <option value="minor">Minor</option>
+            <option value="major">Major</option>
+          </select>
+          <p id="versionPreview" class="hint">1.0.0 -> 1.0.1</p>
+        </div>
+        <div class="field full">
+          <label for="versionNote">Changelog Note</label>
+          <input id="versionNote" type="text" placeholder="What changed?" maxlength="200" />
+        </div>
+      </div>
+      <div class="button-row modal-actions">
+        <button id="btnSaveVersionBack" class="tonal">Back</button>
+        <button id="btnSaveVersionConfirm" class="primary">Save</button>
       </div>
     </div>
   </div>

@@ -29,14 +29,16 @@
   const keywordCardsEl = document.getElementById("keywordCards");
   const pingSaveDockEl = document.getElementById("pingSaveDock");
   const blocklistContainer = document.getElementById("blocklistContainer");
-  
+
   // Blocklist diff tracking
   let originalBlocklist = [];
   let blocklistDiff = { added: [], removed: [] };
-  
+
   // Global click listener to close any open custom selects
   document.addEventListener("click", () => {
-    document.querySelectorAll(".select-menu.open").forEach(m => m.classList.remove("open"));
+    document
+      .querySelectorAll(".select-menu.open")
+      .forEach((m) => m.classList.remove("open"));
   });
   const backupListEl = document.getElementById("backupList");
   const backupMetaEl = document.getElementById("backupMeta");
@@ -51,6 +53,7 @@
   const confirmOkBtnEl = document.getElementById("confirmOkBtn");
   const confirmCancelBtnEl = document.getElementById("confirmCancelBtn");
   const settingsContainer = document.getElementById("settingsContainer");
+  const changelogContainer = document.getElementById("changelogContainer");
   const btnSaveSettings = document.getElementById("btnSaveSettings");
   const btnDiscardSettings = document.getElementById("btnDiscardSettings");
   const roleGroupsContainer = document.getElementById("roleGroupsContainer");
@@ -59,11 +62,17 @@
   const btnAddRoleGroup = document.getElementById("btnAddRoleGroup");
   const blocklistAddOverlayEl = document.getElementById("blocklistAddOverlay");
   const blocklistAddModeEl = document.getElementById("blocklistAddMode");
-  const blocklistAddModeCustomEl = document.getElementById("blocklistAddModeCustom");
+  const blocklistAddModeCustomEl = document.getElementById(
+    "blocklistAddModeCustom",
+  );
   const blocklistAddValueEl = document.getElementById("blocklistAddValue");
   const blocklistAddHintEl = document.getElementById("blocklistAddHint");
-  const btnBlocklistAddCancelEl = document.getElementById("btnBlocklistAddCancel");
-  const btnBlocklistAddApplyEl = document.getElementById("btnBlocklistAddApply");
+  const btnBlocklistAddCancelEl = document.getElementById(
+    "btnBlocklistAddCancel",
+  );
+  const btnBlocklistAddApplyEl = document.getElementById(
+    "btnBlocklistAddApply",
+  );
   let blocklistAddModeDropdown = null;
 
   let confirmResolver = null;
@@ -73,16 +82,19 @@
   let sessionCheckInterval = null;
   const SESSION_DURATION_MS = 30 * 60 * 1000;
   const SESSION_WARNING_THRESHOLD_MS = 5 * 60 * 1000;
-  
+
   const SESSION_MESSAGES = {
-    expiryWarning: (seconds) => `Your session will expire in ${seconds} second${seconds > 1 ? 's' : ''}.`,
-    sessionExtended: 'Session extended by 30 minutes',
-    sessionExpired: 'Session expired. Please log in again.',
-    extendFailed: 'Failed to extend session. Please log in again.',
-    extendError: 'Error extending session',
+    expiryWarning: (seconds) =>
+      `Your session will expire in ${seconds} second${seconds > 1 ? "s" : ""}.`,
+    sessionExtended: "Session extended by 30 minutes",
+    sessionExpired: "Session expired. Please log in again.",
+    extendFailed: "Failed to extend session. Please log in again.",
+    extendError: "Error extending session",
   };
 
-  const sessionExpiryOverlayEl = document.getElementById("sessionExpiryOverlay");
+  const sessionExpiryOverlayEl = document.getElementById(
+    "sessionExpiryOverlay",
+  );
   const sessionExpiryTitleEl = document.getElementById("sessionExpiryTitle");
   const sessionExpiryBodyEl = document.getElementById("sessionExpiryBody");
   const btnSessionExtend = document.getElementById("btnSessionExtend");
@@ -101,7 +113,7 @@
     if (timeLeft <= 0) {
       // Session expired - auto logout without reload
       setStatus(SESSION_MESSAGES.sessionExpired, "error");
-      
+
       // Clear all state and redirect to login
       ws.close();
       state = null;
@@ -116,9 +128,10 @@
         sessionExpiryOverlayEl.classList.add("open");
         sessionExpiryOverlayEl.setAttribute("aria-hidden", "false");
       }
-      
+
       const secondsLeft = Math.ceil(timeLeft / 1000);
-      sessionExpiryBodyEl.textContent = SESSION_MESSAGES.expiryWarning(secondsLeft);
+      sessionExpiryBodyEl.textContent =
+        SESSION_MESSAGES.expiryWarning(secondsLeft);
     }
 
     sessionCheckInterval = setTimeout(checkSessionExpiry, 1000);
@@ -146,13 +159,17 @@
   }
 
   function toTitleCase(str) {
-    let string = str.split(" ").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+    let string = str
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
     string = string.replace("Ok", "OK");
     return string;
   }
 
   function ensureItemKeywordConfig(item) {
-    if (!item || typeof item !== "object") return { mode: "poll", filter: "", query: null };
+    if (!item || typeof item !== "object")
+      return { mode: "poll", filter: "", query: null };
     let repaired = false;
     const repairReasons = [];
     if (!item.keyword || typeof item.keyword !== "object") {
@@ -160,8 +177,12 @@
       repaired = true;
       repairReasons.push("missing keyword object");
     }
-    const hasQueryText = typeof item.keyword.query === "string" && item.keyword.query.trim() !== "";
-    const modeValue = String(item.keyword.mode || "").trim().toLowerCase();
+    const hasQueryText =
+      typeof item.keyword.query === "string" &&
+      item.keyword.query.trim() !== "";
+    const modeValue = String(item.keyword.mode || "")
+      .trim()
+      .toLowerCase();
     if (modeValue === "poll" || modeValue === "query") {
       item.keyword.mode = modeValue;
     } else if (!modeValue) {
@@ -184,7 +205,10 @@
       repairReasons.push("invalid query");
     }
     if (repaired) {
-      console.log("[normalize] ensureItemKeywordConfig:", repairReasons.join(", "));
+      console.log(
+        "[normalize] ensureItemKeywordConfig:",
+        repairReasons.join(", "),
+      );
     }
     return item.keyword;
   }
@@ -208,20 +232,29 @@
   }
 
   function updatePingSaveButtonState() {
-    const hasPings = !!state && Array.isArray(state.pings) && state.pings.length > 0;
-    const hasValidationErrors = hasPings && selectedPingIndex >= 0
-      ? validatePingForSave(state.pings[selectedPingIndex], selectedPingIndex).length > 0
-      : false;
-    btnSavePingEl.disabled = !hasPings || !hasPendingPingChanges || hasValidationErrors;
+    const hasPings =
+      !!state && Array.isArray(state.pings) && state.pings.length > 0;
+    const hasValidationErrors =
+      hasPings && selectedPingIndex >= 0
+        ? validatePingForSave(state.pings[selectedPingIndex], selectedPingIndex)
+            .length > 0
+        : false;
+    btnSavePingEl.disabled =
+      !hasPings || !hasPendingPingChanges || hasValidationErrors;
     if (hasValidationErrors) {
       btnSavePingEl.textContent = "Fix Validation Errors";
     } else {
-      btnSavePingEl.textContent = hasPendingPingChanges ? "Save Ping Changes" : "All Changes Saved";
+      btnSavePingEl.textContent = hasPendingPingChanges
+        ? "Save Ping Changes"
+        : "All Changes Saved";
     }
 
     if (pingSaveDockEl) {
       pingSaveDockEl.classList.toggle("visible", hasPendingPingChanges);
-      pingSaveDockEl.setAttribute("aria-hidden", hasPendingPingChanges ? "false" : "true");
+      pingSaveDockEl.setAttribute(
+        "aria-hidden",
+        hasPendingPingChanges ? "false" : "true",
+      );
     }
 
     const btnDiscardEl = document.getElementById("btnDiscard");
@@ -231,15 +264,20 @@
   }
 
   function updateBlocklistSaveState() {
-    const hasChanges = JSON.stringify(state.blocklist) !== JSON.stringify(originalBlocklist);
+    const hasChanges =
+      JSON.stringify(state.blocklist) !== JSON.stringify(originalBlocklist);
     btnSaveBlocklist.disabled = !hasChanges;
-    btnSaveBlocklist.textContent = hasChanges ? "Save Blocklist Changes" : "All Changes Saved";
+    btnSaveBlocklist.textContent = hasChanges
+      ? "Save Blocklist Changes"
+      : "All Changes Saved";
     btnDiscardBlocklist.style.display = hasChanges ? "inline-flex" : "none";
     toggleSaveDockVisibility(btnSaveBlocklist, hasChanges);
   }
 
   function isRegexBlocklistEntry(value) {
-    return String(value || "").toLowerCase().startsWith("regexp::");
+    return String(value || "")
+      .toLowerCase()
+      .startsWith("regexp::");
   }
 
   function stripRegexPrefix(value) {
@@ -248,9 +286,10 @@
 
   function updateBlocklistAddHint() {
     if (!blocklistAddHintEl || !blocklistAddModeEl) return;
-    blocklistAddHintEl.textContent = blocklistAddModeEl.value === "regex"
-      ? "Saved as a regex pattern."
-      : "Saved as plaintext.";
+    blocklistAddHintEl.textContent =
+      blocklistAddModeEl.value === "regex"
+        ? "Saved as a regex pattern."
+        : "Saved as plaintext.";
   }
 
   function syncBlocklistDialogModeFromValue() {
@@ -270,7 +309,9 @@
 
   function applyBlocklistDialogModeToggle() {
     if (!blocklistAddModeEl || !blocklistAddValueEl) return;
-    blocklistAddValueEl.value = stripRegexPrefix(blocklistAddValueEl.value).trim();
+    blocklistAddValueEl.value = stripRegexPrefix(
+      blocklistAddValueEl.value,
+    ).trim();
     updateBlocklistAddHint();
   }
 
@@ -289,7 +330,9 @@
     let currentValue = normalize(selectedValue);
 
     const getLabel = (value) => {
-      const found = options.find((opt) => normalize(opt.value) === normalize(value));
+      const found = options.find(
+        (opt) => normalize(opt.value) === normalize(value),
+      );
       return found ? found.label : (options[0]?.label ?? "");
     };
 
@@ -325,11 +368,18 @@
     syncTrigger();
     container.appendChild(trigger);
     container.appendChild(menu);
-    return { container, setValue: (v) => { currentValue = normalize(v); syncTrigger(); } };
+    return {
+      container,
+      setValue: (v) => {
+        currentValue = normalize(v);
+        syncTrigger();
+      },
+    };
   }
 
   function openBlocklistAddDialog() {
-    if (!blocklistAddOverlayEl || !blocklistAddModeEl || !blocklistAddValueEl) return;
+    if (!blocklistAddOverlayEl || !blocklistAddModeEl || !blocklistAddValueEl)
+      return;
     blocklistAddModeEl.value = "plain";
     if (blocklistAddModeDropdown) {
       blocklistAddModeDropdown.setValue("plain");
@@ -356,9 +406,10 @@
     }
 
     const normalizedCore = stripRegexPrefix(raw).trim();
-    const finalValue = blocklistAddModeEl.value === "regex"
-      ? `regexp::${normalizedCore}`
-      : normalizedCore;
+    const finalValue =
+      blocklistAddModeEl.value === "regex"
+        ? `regexp::${normalizedCore}`
+        : normalizedCore;
 
     state.blocklist.push(finalValue);
     renderBlocklist();
@@ -368,9 +419,13 @@
   }
 
   function updateRolesSaveState() {
-    const hasChanges = JSON.stringify(state.self_roles) !== JSON.stringify(originalState.self_roles);
+    const hasChanges =
+      JSON.stringify(state.self_roles) !==
+      JSON.stringify(originalState.self_roles);
     btnSaveRoles.disabled = !hasChanges;
-    btnSaveRoles.textContent = hasChanges ? "Save Role Picker Changes" : "All Changes Saved";
+    btnSaveRoles.textContent = hasChanges
+      ? "Save Role Picker Changes"
+      : "All Changes Saved";
     btnDiscardRoles.style.display = hasChanges ? "inline-flex" : "none";
     toggleSaveDockVisibility(btnSaveRoles, hasChanges);
   }
@@ -379,11 +434,19 @@
     const s1 = { ...state };
     const s2 = { ...originalState };
     // Exclude pings, blocklist, self_roles, editor_metadata for comparison
-    delete s1.pings; delete s1.blocklist; delete s1.self_roles; delete s1.editor_metadata;
-    delete s2.pings; delete s2.blocklist; delete s2.self_roles; delete s2.editor_metadata;
+    delete s1.pings;
+    delete s1.blocklist;
+    delete s1.self_roles;
+    delete s1.editor_metadata;
+    delete s2.pings;
+    delete s2.blocklist;
+    delete s2.self_roles;
+    delete s2.editor_metadata;
     const hasChanges = JSON.stringify(s1) !== JSON.stringify(s2);
     btnSaveSettings.disabled = !hasChanges;
-    btnSaveSettings.textContent = hasChanges ? "Save Settings" : "All Changes Saved";
+    btnSaveSettings.textContent = hasChanges
+      ? "Save Settings"
+      : "All Changes Saved";
     btnDiscardSettings.style.display = hasChanges ? "inline-flex" : "none";
     toggleSaveDockVisibility(btnSaveSettings, hasChanges);
   }
@@ -404,14 +467,14 @@
       "Revert all unsaved changes for this ping to the last saved state?",
       "Discard",
       "danger",
-      false // don't close on confirm
+      false, // don't close on confirm
     );
 
     if (confirmed) {
       setModalLoading(true);
       const btnDiscard = document.getElementById("btnDiscard");
       if (btnDiscard) btnDiscard.classList.add("loading");
-      
+
       send({ action: ACTION_GET_STATE });
       setStatus("Discarding changes...", "ok");
     }
@@ -462,8 +525,10 @@
     } else {
       const currentPing = state.pings[selectedPingIndex];
       const origPing = originalState.pings[selectedPingIndex];
-      const currentMeta = state.editor_metadata?.pings?.[selectedPingIndex] || null;
-      const origMeta = originalState.editor_metadata?.pings?.[selectedPingIndex] || null;
+      const currentMeta =
+        state.editor_metadata?.pings?.[selectedPingIndex] || null;
+      const origMeta =
+        originalState.editor_metadata?.pings?.[selectedPingIndex] || null;
 
       const pingEqual = deepEqualForDirtyCheck(currentPing, origPing);
       const metaEqual = deepEqualForDirtyCheck(currentMeta, origMeta);
@@ -473,10 +538,14 @@
         !hasPendingPingChanges &&
         currentPing &&
         origPing &&
-        currentPing.price_ranges_last_updated !== origPing.price_ranges_last_updated
+        currentPing.price_ranges_last_updated !==
+          origPing.price_ranges_last_updated
       ) {
-        currentPing.price_ranges_last_updated = origPing.price_ranges_last_updated;
-        const input = document.querySelector('input[data-field="price_ranges_last_updated"]');
+        currentPing.price_ranges_last_updated =
+          origPing.price_ranges_last_updated;
+        const input = document.querySelector(
+          'input[data-field="price_ranges_last_updated"]',
+        );
         if (input) {
           const date = new Date(origPing.price_ranges_last_updated);
           input.value = date.toISOString().slice(0, 16);
@@ -492,10 +561,15 @@
 
     const currentPing = state.pings[selectedPingIndex];
     const originalPing = originalState?.pings?.[selectedPingIndex];
-    if (!currentPing || !originalPing || typeof currentPing !== "object") return;
+    if (!currentPing || !originalPing || typeof currentPing !== "object")
+      return;
 
-    const currentKeywords = Array.isArray(currentPing.items) ? currentPing.items : [];
-    const originalKeywords = Array.isArray(originalPing.items) ? originalPing.items : [];
+    const currentKeywords = Array.isArray(currentPing.items)
+      ? currentPing.items
+      : [];
+    const originalKeywords = Array.isArray(originalPing.items)
+      ? originalPing.items
+      : [];
 
     let shouldTouch = currentKeywords.length !== originalKeywords.length;
 
@@ -504,9 +578,18 @@
         const currentKeyword = currentKeywords[i] || {};
         const originalKeyword = originalKeywords[i] || {};
 
-        const minChanged = !Object.is(currentKeyword.min_price ?? null, originalKeyword.min_price ?? null);
-        const maxChanged = !Object.is(currentKeyword.max_price ?? null, originalKeyword.max_price ?? null);
-        const targetChanged = !Object.is(currentKeyword.target_price ?? null, originalKeyword.target_price ?? null);
+        const minChanged = !Object.is(
+          currentKeyword.min_price ?? null,
+          originalKeyword.min_price ?? null,
+        );
+        const maxChanged = !Object.is(
+          currentKeyword.max_price ?? null,
+          originalKeyword.max_price ?? null,
+        );
+        const targetChanged = !Object.is(
+          currentKeyword.target_price ?? null,
+          originalKeyword.target_price ?? null,
+        );
         const rangesChanged = !deepEqualForDirtyCheck(
           currentKeyword.deal_ranges ?? null,
           originalKeyword.deal_ranges ?? null,
@@ -529,7 +612,9 @@
     ping.price_ranges_last_updated = new Date().toISOString();
 
     // Keep the visible datetime-local input in sync (this panel doesn't always re-render).
-    const input = document.querySelector('input[data-field="price_ranges_last_updated"]');
+    const input = document.querySelector(
+      'input[data-field="price_ranges_last_updated"]',
+    );
     if (input) {
       const date = new Date(ping.price_ranges_last_updated);
       input.value = date.toISOString().slice(0, 16);
@@ -543,7 +628,12 @@
     updateBlocklistSaveState();
   }
 
-  function openConfirmDialog(title, message, confirmLabel = "Confirm", style = "primary") {
+  function openConfirmDialog(
+    title,
+    message,
+    confirmLabel = "Confirm",
+    style = "primary",
+  ) {
     confirmTitleEl.textContent = title;
     confirmBodyEl.textContent = message;
     confirmOkBtnEl.textContent = confirmLabel;
@@ -574,7 +664,13 @@
     }
   }
 
-  function confirmAction(title, message, confirmLabel = "Confirm", style = "primary", closeOnConfirm = true) {
+  function confirmAction(
+    title,
+    message,
+    confirmLabel = "Confirm",
+    style = "primary",
+    closeOnConfirm = true,
+  ) {
     return new Promise((resolve) => {
       confirmResolver = (val) => {
         if (val && !closeOnConfirm) {
@@ -598,8 +694,13 @@
           if (!item.keyword || typeof item.keyword !== "object") {
             item.keyword = { mode: "poll", filter: "", query: null };
           }
-          const queryText = typeof item.keyword.query === "string" ? item.keyword.query.trim() : "";
-          const modeValue = String(item.keyword.mode || "").trim().toLowerCase();
+          const queryText =
+            typeof item.keyword.query === "string"
+              ? item.keyword.query.trim()
+              : "";
+          const modeValue = String(item.keyword.mode || "")
+            .trim()
+            .toLowerCase();
           if (!modeValue) {
             item.keyword.mode = queryText ? "query" : "poll";
           } else if (modeValue !== "poll" && modeValue !== "query") {
@@ -636,14 +737,29 @@
     let j = 0;
     while (i < n && j < m) {
       if (beforeLines[i] === afterLines[j]) {
-        out.push({ type: "ctx", left: i + 1, right: j + 1, text: beforeLines[i] });
+        out.push({
+          type: "ctx",
+          left: i + 1,
+          right: j + 1,
+          text: beforeLines[i],
+        });
         i += 1;
         j += 1;
       } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-        out.push({ type: "del", left: i + 1, right: null, text: beforeLines[i] });
+        out.push({
+          type: "del",
+          left: i + 1,
+          right: null,
+          text: beforeLines[i],
+        });
         i += 1;
       } else {
-        out.push({ type: "add", left: null, right: j + 1, text: afterLines[j] });
+        out.push({
+          type: "add",
+          left: null,
+          right: j + 1,
+          text: afterLines[j],
+        });
         j += 1;
       }
     }
@@ -673,7 +789,11 @@
 
     const keep = new Set();
     changedIndexes.forEach((idx) => {
-      for (let i = Math.max(0, idx - contextLines); i <= Math.min(diff.length - 1, idx + contextLines); i++) {
+      for (
+        let i = Math.max(0, idx - contextLines);
+        i <= Math.min(diff.length - 1, idx + contextLines);
+        i++
+      ) {
         keep.add(i);
       }
     });
@@ -689,13 +809,16 @@
         const line = diff[idx];
         const left = line.left || 0;
         const right = line.right || 0;
-        rendered.push(`<span class="save-diff-line hunk">@@ -${left}, +${right} @@</span>`);
+        rendered.push(
+          `<span class="save-diff-line hunk">@@ -${left}, +${right} @@</span>`,
+        );
         inHunk = true;
       }
       const line = diff[idx];
-      const prefix = line.type === "add" ? "+" : line.type === "del" ? "-" : " ";
+      const prefix =
+        line.type === "add" ? "+" : line.type === "del" ? "-" : " ";
       rendered.push(
-        `<span class="save-diff-line ${line.type}">${prefix} ${escapeHtml(line.text)}</span>`
+        `<span class="save-diff-line ${line.type}">${prefix} ${escapeHtml(line.text)}</span>`,
       );
     }
 
@@ -707,7 +830,10 @@
     delete beforePayload.blocklist;
     delete beforePayload.global_blocklist;
     delete beforePayload.editor_metadata;
-    saveDiffPreEl.innerHTML = buildContextDiffHtml(beforePayload, payload.parsed || {});
+    saveDiffPreEl.innerHTML = buildContextDiffHtml(
+      beforePayload,
+      payload.parsed || {},
+    );
     pendingSavePayload = payload;
     saveDiffOverlayEl.classList.add("open");
     saveDiffOverlayEl.setAttribute("aria-hidden", "false");
@@ -716,7 +842,102 @@
   function closeSaveDiffDialog() {
     saveDiffOverlayEl.classList.remove("open");
     saveDiffOverlayEl.setAttribute("aria-hidden", "true");
-    pendingSavePayload = null;
+  }
+
+  function parseSemver(versionText) {
+    const match = String(versionText || "1.0.0").trim().match(/^(\d+)\.(\d+)\.(\d+)$/);
+    if (!match) return { major: 1, minor: 0, patch: 0 };
+    return {
+      major: Number(match[1]),
+      minor: Number(match[2]),
+      patch: Number(match[3]),
+    };
+  }
+
+  function incrementSemver(versionText, level) {
+    const semver = parseSemver(versionText);
+    if (level === "major") {
+      return `${semver.major + 1}.0.0`;
+    }
+    if (level === "minor") {
+      return `${semver.major}.${semver.minor + 1}.0`;
+    }
+    return `${semver.major}.${semver.minor}.${semver.patch + 1}`;
+  }
+
+  function getCurrentConfigVersion() {
+    const fallback = "1.0.0";
+    if (!state || typeof state !== "object") return fallback;
+
+    const direct = state.config_version;
+    if (typeof direct === "string" && /^\d+\.\d+\.\d+$/.test(direct.trim())) {
+      return direct.trim();
+    }
+
+    const changelog = Array.isArray(state.changelog) ? state.changelog : [];
+    const latestEntry = changelog.find((entry) => entry && typeof entry === "object" && entry.latest);
+    if (latestEntry && typeof latestEntry.version === "string" && /^\d+\.\d+\.\d+$/.test(latestEntry.version)) {
+      return latestEntry.version;
+    }
+    return fallback;
+  }
+
+  function buildVersionedPayload(basePayload, currentVersion, level, noteText) {
+    const payload = cloneJson(basePayload || {});
+    if (!payload.parsed || typeof payload.parsed !== "object") return payload;
+
+    const levelSafe = ["major", "minor", "patch"].includes(level) ? level : "patch";
+    const note = String(noteText || "").trim();
+    const nextVersion = incrementSemver(currentVersion, levelSafe);
+    const timestamp = new Date().toISOString();
+
+    const existingChangelog = Array.isArray(payload.parsed.changelog)
+      ? payload.parsed.changelog.filter((entry) => entry && typeof entry === "object")
+      : [];
+
+    payload.parsed.config_version = nextVersion;
+    payload.parsed.changelog = [
+      {
+        version: nextVersion,
+        level: levelSafe,
+        note: note || "No note provided.",
+        timestamp,
+        latest: true,
+      },
+      ...existingChangelog.map((entry) => ({ ...entry, latest: false })),
+    ];
+
+    return payload;
+  }
+
+  function openVersionDialogFromPendingPayload() {
+    if (!pendingSavePayload || !pendingSavePayload.parsed) return;
+    const currentVersion = getCurrentConfigVersion();
+
+    if (versionLevelEl) versionLevelEl.value = "patch";
+    if (versionNoteEl) versionNoteEl.value = "";
+
+    pendingVersionedPayload = buildVersionedPayload(
+      pendingSavePayload,
+      currentVersion,
+      "patch",
+      "",
+    );
+    if (versionPreviewEl && pendingVersionedPayload?.parsed?.config_version) {
+      versionPreviewEl.textContent = `${currentVersion} -> ${pendingVersionedPayload.parsed.config_version}`;
+    }
+
+    saveVersionOverlayEl.classList.add("open");
+    saveVersionOverlayEl.setAttribute("aria-hidden", "false");
+  }
+
+  function closeVersionDialog(preservePendingSave = true) {
+    saveVersionOverlayEl.classList.remove("open");
+    saveVersionOverlayEl.setAttribute("aria-hidden", "true");
+    pendingVersionedPayload = null;
+    if (!preservePendingSave) {
+      pendingSavePayload = null;
+    }
   }
 
   function send(payload) {
@@ -768,27 +989,48 @@
   const autoGenerateTitleEl = document.getElementById("autoGenerateTitle");
   const autoGenerateModalEl = document.getElementById("autoGenerateModal");
   const autoComponentTypeEl = document.getElementById("autoComponentType");
-  const autoComponentFieldsGridEl = document.getElementById("autoComponentFieldsGrid");
+  const autoComponentFieldsGridEl = document.getElementById(
+    "autoComponentFieldsGrid",
+  );
   const autoMinPriceEl = document.getElementById("autoMinPrice");
   const autoTargetPriceEl = document.getElementById("autoTargetPrice");
   const autoMaxPriceEl = document.getElementById("autoMaxPrice");
-  const btnAutoGenerateCancelEl = document.getElementById("btnAutoGenerateCancel");
-  const btnAutoGenerateApplyEl = document.getElementById("btnAutoGenerateApply");
-  const filterGenerateOverlayEl = document.getElementById("filterGenerateOverlay");
+  const btnAutoGenerateCancelEl = document.getElementById(
+    "btnAutoGenerateCancel",
+  );
+  const btnAutoGenerateApplyEl = document.getElementById(
+    "btnAutoGenerateApply",
+  );
+  const filterGenerateOverlayEl = document.getElementById(
+    "filterGenerateOverlay",
+  );
   const filterComponentTypeEl = document.getElementById("filterComponentType");
-  const filterComponentFieldsGridEl = document.getElementById("filterComponentFieldsGrid");
-  const btnFilterGenerateCancelEl = document.getElementById("btnFilterGenerateCancel");
-  const btnFilterGenerateApplyEl = document.getElementById("btnFilterGenerateApply");
+  const filterComponentFieldsGridEl = document.getElementById(
+    "filterComponentFieldsGrid",
+  );
+  const btnFilterGenerateCancelEl = document.getElementById(
+    "btnFilterGenerateCancel",
+  );
+  const btnFilterGenerateApplyEl = document.getElementById(
+    "btnFilterGenerateApply",
+  );
   const saveDiffOverlayEl = document.getElementById("saveDiffOverlay");
   const saveDiffPreEl = document.getElementById("saveDiffPre");
   const btnSaveDiffCancelEl = document.getElementById("btnSaveDiffCancel");
   const btnSaveDiffConfirmEl = document.getElementById("btnSaveDiffConfirm");
+  const saveVersionOverlayEl = document.getElementById("saveVersionOverlay");
+  const versionLevelEl = document.getElementById("versionLevel");
+  const versionPreviewEl = document.getElementById("versionPreview");
+  const versionNoteEl = document.getElementById("versionNote");
+  const btnSaveVersionBackEl = document.getElementById("btnSaveVersionBack");
+  const btnSaveVersionConfirmEl = document.getElementById("btnSaveVersionConfirm");
 
   let arrayResolver = null;
   let currentArrayList = [];
   let currentArrayIsNumeric = false;
   let currentKeywordIndex = null;
   let pendingSavePayload = null;
+  let pendingVersionedPayload = null;
   let ebayCategories = [];
   let autoGenerateContext = { conversion_mode: false, item_mode: "poll" };
 
@@ -827,14 +1069,33 @@
   };
 
   const NVME_EXCLUSIONS = [
-    "\\bNotebook\\b", "\\bDesktop\\b", "\\bPC\\b", "\\bDDR\\d\\b", "\\bRAM\\b", "\\bHDD\\b",
-    "\\bHard\\s*Disk\\b", "\\bHard\\s*Drive\\b", "\\bExternal\\b", "\\bUSB\\b", "\\bPortable\\b",
-    "\\b\\d{4}\\s*RPM\\b", "\\beMMC\\b", "\\bflash\\s*drive\\b", "\\bsd\\s*card\\b",
-    "\\bmemory\\s*card\\b", "\\bmemory\\s*stick\\b", "\\b2230\\b", "\\b2242\\b", "2\\.5", "3\\.5", "SATA"
+    "\\bNotebook\\b",
+    "\\bDesktop\\b",
+    "\\bDDR\\d\\b",
+    "\\bRAM\\b",
+    "\\bHDD\\b",
+    "\\bExternal\\b",
+    "\\bUSB\\b",
+    "\\bPortable\\b",
+    "\\b\\d{4}\\s*RPM\\b",
+    "\\beMMC\\b",
+    "\\bflash\\s*drive\\b",
+    "\\bsd\\s*card\\b",
+    "\\bmemory\\s*card\\b",
+    "\\bmemory\\s*stick\\b",
+    "\\b2230\\b",
+    "\\b2242\\b",
+    "2\\.5",
+    "3\\.5",
+    "SATA",
   ].join("|");
 
   const NVME_KEYWORDS = [
-    "SSD", "NVMe", "M\\.2", "Solid\\s*State", "SDD"
+    "SSD",
+    "NVMe",
+    "M\\.2",
+    "Solid\\s*State",
+    "SDD",
   ].join("|");
 
   function openArrayEditor(title, initialList, isNumeric, onSave) {
@@ -843,12 +1104,12 @@
     currentArrayIsNumeric = isNumeric;
     arrayNewItemInputEl.value = "";
     arrayNewItemInputEl.type = isNumeric ? "number" : "text";
-    
+
     renderArrayItems();
-    
+
     arrayEditorOverlayEl.classList.add("open");
     arrayEditorOverlayEl.setAttribute("aria-hidden", "false");
-    
+
     arrayResolver = onSave;
   }
 
@@ -858,7 +1119,7 @@
       const chip = document.createElement("div");
       chip.className = "array-chip";
       chip.textContent = val;
-      
+
       const remove = document.createElement("span");
       remove.className = "remove-item";
       remove.textContent = "×";
@@ -866,7 +1127,7 @@
         currentArrayList.splice(index, 1);
         renderArrayItems();
       });
-      
+
       chip.appendChild(remove);
       arrayItemsListEl.appendChild(chip);
     });
@@ -875,13 +1136,13 @@
   function addArrayItem() {
     const val = arrayNewItemInputEl.value.trim();
     if (!val) return;
-    
+
     let processed = val;
     if (currentArrayIsNumeric) {
       processed = Number(val);
       if (isNaN(processed)) return;
     }
-    
+
     if (!currentArrayList.includes(processed)) {
       currentArrayList.push(processed);
       renderArrayItems();
@@ -902,10 +1163,18 @@
     const normalized = String(keywordValue || "").toLowerCase();
     if (!normalized) return "nvidia_gpu";
     if (normalized.includes("ryzen")) return "amd_cpu";
-    if (normalized.includes("rtx") || normalized.includes("gtx")) return "nvidia_gpu";
-    if (normalized.includes("rx") || normalized.includes("xtx")) return "amd_gpu";
+    if (normalized.includes("rtx") || normalized.includes("gtx"))
+      return "nvidia_gpu";
+    if (normalized.includes("rx") || normalized.includes("xtx"))
+      return "amd_gpu";
     if (normalized.includes("ddr")) return "ram";
-    if (normalized.includes("nvme") || normalized.includes("m\\.2") || normalized.includes("m.2") || normalized.includes("solid state") || normalized.includes("ssd")) {
+    if (
+      normalized.includes("nvme") ||
+      normalized.includes("m\\.2") ||
+      normalized.includes("m.2") ||
+      normalized.includes("solid state") ||
+      normalized.includes("ssd")
+    ) {
       return "nvme_ssd";
     }
     return "custom";
@@ -935,7 +1204,7 @@
     if (remainder === 1 || remainder === 2) {
       minPrice -= remainder;
     } else if (remainder !== 0) {
-      minPrice += (5 - remainder);
+      minPrice += 5 - remainder;
     }
 
     return { minPrice, formula };
@@ -952,9 +1221,15 @@
     const hintEl = document.getElementById("maxPriceHint");
     if (!hintEl) return;
     const targetPrice = Number(autoTargetPriceEl.value) || 0;
-    const componentType = autoComponentTypeEl ? autoComponentTypeEl.value : "custom";
+    const componentType = autoComponentTypeEl
+      ? autoComponentTypeEl.value
+      : "custom";
     const suggestedMinPrice = getSuggestedMinPrice(targetPrice).minPrice;
-    const ranges = calculateDealRanges(suggestedMinPrice, targetPrice, componentType);
+    const ranges = calculateDealRanges(
+      suggestedMinPrice,
+      targetPrice,
+      componentType,
+    );
     hintEl.textContent = `Suggested: $${ranges.max_price}`;
   }
 
@@ -975,7 +1250,14 @@
 
     autoComponentFieldsGridEl.innerHTML = "";
 
-    function addField({ key, label, type = "text", placeholder = "", options = [], cls = "half" }) {
+    function addField({
+      key,
+      label,
+      type = "text",
+      placeholder = "",
+      options = [],
+      cls = "half",
+    }) {
       const wrapper = document.createElement("div");
       wrapper.className = `field ${cls}`;
 
@@ -1032,18 +1314,30 @@
         key: "ryzen",
         label: "Ryzen Series",
         type: "select",
-        options: ["3", "5", "7", "9"]
+        options: ["3", "5", "7", "9"],
       });
-      addField({ key: "model", label: "CPU Model", placeholder: "e.g., 3600, 7800" });
-      addField({ key: "suffix", label: "Suffix (Optional)", placeholder: "e.g., X, X3D" });
+      addField({
+        key: "model",
+        label: "CPU Model",
+        placeholder: "e.g., 3600, 7800",
+      });
+      addField({
+        key: "suffix",
+        label: "Suffix (Optional)",
+        placeholder: "e.g., X, X3D",
+      });
     } else if (componentType === "nvidia_gpu") {
       addField({
         key: "brand",
         label: "GPU Brand",
         type: "select",
-        options: ["RTX", "GTX"]
+        options: ["RTX", "GTX"],
       });
-      addField({ key: "model", label: "GPU Model", placeholder: "e.g., 3080, 4070, 5080" });
+      addField({
+        key: "model",
+        label: "GPU Model",
+        placeholder: "e.g., 3080, 4070, 5080",
+      });
       addField({
         key: "variant",
         label: "Variant",
@@ -1052,14 +1346,23 @@
           { value: "normal", label: "Normal" },
           { value: "ti", label: "Ti" },
           { value: "super", label: "SUPER" },
-          { value: "ti_super", label: "Ti SUPER" }
-        ]
+          { value: "ti_super", label: "Ti SUPER" },
+        ],
       });
       if (values.variant === "normal") {
-        addField({ key: "vram", label: "VRAM GB (Optional)", type: "number", placeholder: "e.g., 12" });
+        addField({
+          key: "vram",
+          label: "VRAM GB (Optional)",
+          type: "number",
+          placeholder: "e.g., 12",
+        });
       }
     } else if (componentType === "amd_gpu") {
-      addField({ key: "model", label: "GPU Model", placeholder: "e.g., 6600, 7800, 9070" });
+      addField({
+        key: "model",
+        label: "GPU Model",
+        placeholder: "e.g., 6600, 7800, 9070",
+      });
       addField({
         key: "variant",
         label: "Variant",
@@ -1067,13 +1370,25 @@
         options: [
           { value: "normal", label: "Normal" },
           { value: "xt", label: "XT" },
-          { value: "xtx", label: "XTX" }
-        ]
+          { value: "xtx", label: "XTX" },
+        ],
       });
     } else if (componentType === "ram") {
-      addField({ key: "capacity", label: "Capacity (GB)", placeholder: "e.g., 16" });
-      addField({ key: "ddr", label: "DDR Type", placeholder: "e.g., DDR4, DDR5" });
-      addField({ key: "speed", label: "Speed (MHz)", placeholder: "e.g., 3200, 6000" });
+      addField({
+        key: "capacity",
+        label: "Capacity (GB)",
+        placeholder: "e.g., 16",
+      });
+      addField({
+        key: "ddr",
+        label: "DDR Type",
+        placeholder: "e.g., DDR4, DDR5",
+      });
+      addField({
+        key: "speed",
+        label: "Speed (MHz)",
+        placeholder: "e.g., 3200, 6000",
+      });
     } else if (componentType === "nvme_ssd") {
       addField({
         key: "capacity_mode",
@@ -1082,14 +1397,22 @@
         options: [
           { value: "gb", label: "GB only" },
           { value: "tb", label: "TB only" },
-          { value: "gb_tb", label: "GB or TB" }
-        ]
+          { value: "gb_tb", label: "GB or TB" },
+        ],
       });
       if (values.capacity_mode === "gb" || values.capacity_mode === "gb_tb") {
-        addField({ key: "gb", label: "GB Value / Regex", placeholder: "e.g., 512 or (?:256|512)" });
+        addField({
+          key: "gb",
+          label: "GB Value / Regex",
+          placeholder: "e.g., 512 or (?:256|512)",
+        });
       }
       if (values.capacity_mode === "tb" || values.capacity_mode === "gb_tb") {
-        addField({ key: "tb", label: "TB Value / Regex", placeholder: "e.g., 1 or (?:1|2)" });
+        addField({
+          key: "tb",
+          label: "TB Value / Regex",
+          placeholder: "e.g., 1 or (?:1|2)",
+        });
       }
     } else if (componentType === "custom") {
       const hintWrap = document.createElement("div");
@@ -1105,15 +1428,22 @@
     updateMaxPriceHint();
   }
 
-  function generateKeywordFromComponent(componentType, componentData = null, manualKeyword = "", manualFriendlyName = "") {
-    const values = componentData && typeof componentData === "object"
-      ? componentData
-      : (autoComponentState[componentType] || {});
+  function generateKeywordFromComponent(
+    componentType,
+    componentData = null,
+    manualKeyword = "",
+    manualFriendlyName = "",
+  ) {
+    const values =
+      componentData && typeof componentData === "object"
+        ? componentData
+        : autoComponentState[componentType] || {};
 
     if (componentType === "custom") {
       return {
         keyword: String(manualKeyword || "").trim(),
-        friendlyName: String(manualFriendlyName || "").trim() || "Custom Keyword"
+        friendlyName:
+          String(manualFriendlyName || "").trim() || "Custom Keyword",
       };
     }
 
@@ -1129,12 +1459,14 @@
         : `regexp::(?:\\b(?:R|Ryzen)[\\s-]*${ryzen}[\\s-]*${model}\\b(?![a-zA-Z]))`;
       return {
         keyword,
-        friendlyName: `Ryzen ${ryzen} ${model}${suffix ? suffix : ""}`
+        friendlyName: `Ryzen ${ryzen} ${model}${suffix ? suffix : ""}`,
       };
     }
 
     if (componentType === "nvidia_gpu") {
-      const brand = String(values.brand || "RTX").trim().toUpperCase();
+      const brand = String(values.brand || "RTX")
+        .trim()
+        .toUpperCase();
       const model = String(values.model || "").trim();
       const variant = String(values.variant || "normal");
       const vram = String(values.vram || "").trim();
@@ -1142,7 +1474,10 @@
         return { error: "NVIDIA GPU requires a model." };
       }
       if (variant !== "normal" && vram) {
-        return { error: "VRAM can only be used with normal NVIDIA models (non-Ti, non-SUPER)." };
+        return {
+          error:
+            "VRAM can only be used with normal NVIDIA models (non-Ti, non-SUPER).",
+        };
       }
 
       let keyword;
@@ -1158,10 +1493,17 @@
         keyword = `regexp::(?:\\b(?:${brand}[\\s-]*)?${model}\\b(?![\\s-]*(?:Ti|SUPER)\\b))`;
       }
 
-      const suffix = variant === "ti_super" ? " Ti SUPER" : variant === "ti" ? " Ti" : variant === "super" ? " SUPER" : "";
+      const suffix =
+        variant === "ti_super"
+          ? " Ti SUPER"
+          : variant === "ti"
+            ? " Ti"
+            : variant === "super"
+              ? " SUPER"
+              : "";
       return {
         keyword,
-        friendlyName: `${model}${suffix}${variant === "normal" && vram ? ` ${vram}GB` : ""}`
+        friendlyName: `${model}${suffix}${variant === "normal" && vram ? ` ${vram}GB` : ""}`,
       };
     }
 
@@ -1181,7 +1523,7 @@
       }
       return {
         keyword,
-        friendlyName: `${model}${variant === "xt" ? " XT" : variant === "xtx" ? " XTX" : ""}`
+        friendlyName: `${model}${variant === "xt" ? " XT" : variant === "xtx" ? " XTX" : ""}`,
       };
     }
 
@@ -1194,7 +1536,7 @@
       }
       return {
         keyword: `regexp::(?=.*(?:${capacity})[\\s_-]*(?:gigabytes|gigabyte|gib|gb|g\\b))(?=.*${ddr})(?=.*(?:${speed})).*`,
-        friendlyName: `${capacity}GB ${ddr}${speed ? `-${speed}` : ""}`
+        friendlyName: `${capacity}GB ${ddr}${speed ? `-${speed}` : ""}`,
       };
     }
 
@@ -1210,24 +1552,26 @@
         return { error: "NVMe SSD (TB mode) requires a TB value." };
       }
       if (mode === "gb_tb" && (!gb || !tb)) {
-        return { error: "NVMe SSD (GB or TB mode) requires both GB and TB values." };
+        return {
+          error: "NVMe SSD (GB or TB mode) requires both GB and TB values.",
+        };
       }
 
       if (mode === "gb") {
         return {
           keyword: `regexp::^(?!.*(?:${NVME_EXCLUSIONS}))(?=.*(?:${gb}[\\s_-]*(?:GiB|GB|G\\b)))(?=.*(?:${NVME_KEYWORDS})).*`,
-          friendlyName: `${gb}GB SSD`
+          friendlyName: `${gb}GB SSD`,
         };
       }
       if (mode === "tb") {
         return {
           keyword: `regexp::^(?!.*(?:${NVME_EXCLUSIONS}))(?=.*(?:${tb}[\\s_-]*(?:TiB|TB|T\\b)))(?=.*(?:${NVME_KEYWORDS})).*`,
-          friendlyName: `${tb}TB SSD`
+          friendlyName: `${tb}TB SSD`,
         };
       }
       return {
         keyword: `regexp::^(?!.*(?:${NVME_EXCLUSIONS}))(?=.*(?:${gb}[\\s_-]*(?:GiB|GB|G\\b)|${tb}[\\s_-]*(?:TiB|TB|T\\b)))(?=.*(?:${NVME_KEYWORDS})).*`,
-        friendlyName: `${gb}GB_TB SSD`
+        friendlyName: `${gb}GB_TB SSD`,
       };
     }
 
@@ -1239,8 +1583,11 @@
   }
 
   function ensureFilterComponentTypeOptions() {
-    if (!filterComponentTypeEl || filterComponentTypeEl.options.length > 0) return;
-    AUTO_COMPONENT_TYPES.filter(component => component.value !== "custom").forEach((component) => {
+    if (!filterComponentTypeEl || filterComponentTypeEl.options.length > 0)
+      return;
+    AUTO_COMPONENT_TYPES.filter(
+      (component) => component.value !== "custom",
+    ).forEach((component) => {
       const option = document.createElement("option");
       option.value = component.value;
       option.textContent = component.label;
@@ -1253,7 +1600,14 @@
     const componentType = filterComponentTypeEl.value;
     const values = autoComponentState[componentType] || {};
     filterComponentFieldsGridEl.innerHTML = "";
-    const addInput = (labelText, key, type = "text", cls = "third", options = null, placeholder = "") => {
+    const addInput = (
+      labelText,
+      key,
+      type = "text",
+      cls = "third",
+      options = null,
+      placeholder = "",
+    ) => {
       const wrapper = document.createElement("div");
       wrapper.className = `field ${cls}`;
       const label = document.createElement("label");
@@ -1308,7 +1662,12 @@
         { value: "xtx", label: "XTX" },
       ]);
     } else if (componentType === "amd_cpu") {
-      addInput("Ryzen Series", "ryzen", "select", "third", ["3", "5", "7", "9"]);
+      addInput("Ryzen Series", "ryzen", "select", "third", [
+        "3",
+        "5",
+        "7",
+        "9",
+      ]);
       addInput("Model", "model", "text", "third", null, "e.g., 7800");
     } else if (componentType === "ram") {
       addInput("Capacity (GB)", "capacity", "number", "third");
@@ -1339,27 +1698,42 @@
       autoGenerateTitleEl.textContent = "Generate Deal Ranges";
     }
     currentKeywordIndex = keywordIndex;
-    
+
     // Pre-fill with current keyword values if available
     const ping = state.pings[selectedPingIndex];
     const item = ping.items[keywordIndex];
     const keywordMeta = getKeywordMeta(selectedPingIndex, keywordIndex);
     const itemKeyword = ensureItemKeywordConfig(item);
     autoGenerateContext.item_mode = itemKeyword.mode || "poll";
-    
+
     autoMinPriceEl.value = item.min_price !== null ? item.min_price : "";
-    autoTargetPriceEl.value = item.target_price !== null ? item.target_price : "";
+    autoTargetPriceEl.value =
+      item.target_price !== null ? item.target_price : "";
     autoMaxPriceEl.value = item.max_price !== null ? item.max_price : "";
-    autoComponentState.nvidia_gpu.brand = String(itemKeyword.filter || "").toUpperCase().includes("GTX") ? "GTX" : "RTX";
+    autoComponentState.nvidia_gpu.brand = String(itemKeyword.filter || "")
+      .toUpperCase()
+      .includes("GTX")
+      ? "GTX"
+      : "RTX";
     if (autoComponentTypeEl) {
-      autoComponentTypeEl.value = options.force_component_type || inferComponentTypeFromKeyword(itemKeyword.filter || "") || "custom";
+      autoComponentTypeEl.value =
+        options.force_component_type ||
+        inferComponentTypeFromKeyword(itemKeyword.filter || "") ||
+        "custom";
     }
     if (autoComponentTypeEl) {
       const prefillType = autoComponentTypeEl.value || "custom";
       let prefillData = null;
-      if (options.prefill_component_data && typeof options.prefill_component_data === "object") {
+      if (
+        options.prefill_component_data &&
+        typeof options.prefill_component_data === "object"
+      ) {
         prefillData = cloneJson(options.prefill_component_data);
-      } else if (keywordMeta.mode === "typed" && keywordMeta.component_type === prefillType && keywordMeta.component_data) {
+      } else if (
+        keywordMeta.mode === "typed" &&
+        keywordMeta.component_type === prefillType &&
+        keywordMeta.component_data
+      ) {
         prefillData = cloneJson(keywordMeta.component_data);
       } else if (prefillType !== "custom") {
         prefillData = reverseParseComponentData(item, prefillType);
@@ -1371,12 +1745,12 @@
       };
     }
     renderAutoComponentFields();
-    
+
     // Calculate and display suggested min price
     updateMinPriceHint();
     updateMaxPriceHint();
     updateAutoGeneratedKeywordPreview();
-    
+
     autoGenerateOverlayEl.classList.add("open");
     autoGenerateOverlayEl.setAttribute("aria-hidden", "false");
     autoTargetPriceEl.focus();
@@ -1395,12 +1769,22 @@
     const item = ping.items[keywordIndex];
     const keywordMeta = getKeywordMeta(selectedPingIndex, keywordIndex);
     const itemKeyword = ensureItemKeywordConfig(item);
-    filterComponentTypeEl.value = options.force_component_type || inferComponentTypeFromKeyword(itemKeyword.filter || "") || "nvidia_gpu";
+    filterComponentTypeEl.value =
+      options.force_component_type ||
+      inferComponentTypeFromKeyword(itemKeyword.filter || "") ||
+      "nvidia_gpu";
     const prefillType = filterComponentTypeEl.value || "nvidia_gpu";
     let prefillData = null;
-    if (options.prefill_component_data && typeof options.prefill_component_data === "object") {
+    if (
+      options.prefill_component_data &&
+      typeof options.prefill_component_data === "object"
+    ) {
       prefillData = cloneJson(options.prefill_component_data);
-    } else if (keywordMeta.mode === "typed" && keywordMeta.component_type === prefillType && keywordMeta.component_data) {
+    } else if (
+      keywordMeta.mode === "typed" &&
+      keywordMeta.component_type === prefillType &&
+      keywordMeta.component_data
+    ) {
       prefillData = cloneJson(keywordMeta.component_data);
     } else if (prefillType && prefillType !== "custom") {
       prefillData = reverseParseComponentData(item, prefillType);
@@ -1422,7 +1806,9 @@
   }
 
   function applyFilterGeneratedKeyword() {
-    const componentType = filterComponentTypeEl ? filterComponentTypeEl.value : "custom";
+    const componentType = filterComponentTypeEl
+      ? filterComponentTypeEl.value
+      : "custom";
     const generated = generateKeywordFromComponent(
       componentType,
       autoComponentState[componentType],
@@ -1435,7 +1821,10 @@
     }
     const keywordFilter = (generated.keyword || "").trim();
     if (!keywordFilter) {
-      setStatus("Please provide enough data to generate a filter regex.", "error");
+      setStatus(
+        "Please provide enough data to generate a filter regex.",
+        "error",
+      );
       return;
     }
     const ping = state.pings[selectedPingIndex];
@@ -1445,7 +1834,9 @@
     kwKeyword.filter = keywordFilter;
     keywordMeta.mode = "typed";
     keywordMeta.component_type = componentType;
-    keywordMeta.component_data = cloneJson(autoComponentState[componentType] || {});
+    keywordMeta.component_data = cloneJson(
+      autoComponentState[componentType] || {},
+    );
     closeFilterGenerateModal();
     renderKeywords(ping);
     markPingChanged();
@@ -1462,8 +1853,8 @@
 
       // Work on a copy so Cancel doesn't mutate the original array.
       const workingSelectedIds = (Array.isArray(selectedIds) ? selectedIds : [])
-        .map(v => Number(v))
-        .filter(v => Number.isFinite(v));
+        .map((v) => Number(v))
+        .filter((v) => Number.isFinite(v));
 
       // Create modal overlay
       const overlay = document.createElement("div");
@@ -1471,15 +1862,15 @@
       // Required for visibility: `.modal-overlay` is `display:none` unless it has `.open`
       overlay.classList.add("open");
       overlay.setAttribute("aria-hidden", "false");
-      
+
       const modal = document.createElement("div");
       modal.className = "modal surface";
       modal.setAttribute("role", "dialog");
       modal.setAttribute("aria-modal", "true");
-      
+
       const title = document.createElement("h2");
       title.textContent = "Select eBay Categories";
-      
+
       // Search input
       const searchInput = document.createElement("input");
       searchInput.type = "text";
@@ -1487,24 +1878,26 @@
       searchInput.style.width = "100%";
       searchInput.style.marginBottom = "12px";
       searchInput.style.boxSizing = "border-box";
-      
+
       // Results container (lazy loaded)
       const resultsContainer = document.createElement("div");
       resultsContainer.className = "category-results";
-      
+
       // Show only first 100 results initially
       const MAX_INITIAL_RESULTS = 100;
       let displayedCount = 0;
-      
+
       const renderResults = (searchTerm = "") => {
         resultsContainer.innerHTML = "";
         displayedCount = 0;
-        
+
         const term = searchTerm.toLowerCase().trim();
-        const filtered = ebayCategories.filter(cat => {
+        const filtered = ebayCategories.filter((cat) => {
           if (!term) return true;
-          return cat.name.toLowerCase().includes(term) || 
-                 String(cat.id).includes(term);
+          return (
+            cat.name.toLowerCase().includes(term) ||
+            String(cat.id).includes(term)
+          );
         });
 
         // Keep selected items at the top (while preserving the original ordering
@@ -1520,8 +1913,8 @@
 
         // Only render first MAX_INITIAL_RESULTS
         const toRender = ordered.slice(0, MAX_INITIAL_RESULTS);
-        
-        toRender.forEach(category => {
+
+        toRender.forEach((category) => {
           const item = document.createElement("div");
           item.className = "category-item";
           item.dataset.id = String(category.id);
@@ -1556,7 +1949,7 @@
           resultsContainer.appendChild(item);
           displayedCount++;
         });
-        
+
         // Show message if no results or if we're at limit
         if (filtered.length === 0) {
           const noResults = document.createElement("div");
@@ -1572,25 +1965,25 @@
           resultsContainer.appendChild(limitMsg);
         }
       };
-      
+
       searchInput.addEventListener("input", () => {
         renderResults(searchInput.value);
       });
-      
+
       // Initial render
       renderResults();
-      
+
       // Buttons
       const buttonRow = document.createElement("div");
       buttonRow.className = "button-row modal-actions";
-      
+
       const cancelBtn = document.createElement("button");
       cancelBtn.className = "tonal";
       cancelBtn.textContent = "Cancel";
       cancelBtn.addEventListener("click", () => {
         overlay.remove();
       });
-      
+
       const doneBtn = document.createElement("button");
       doneBtn.className = "primary";
       doneBtn.textContent = "Done";
@@ -1598,30 +1991,35 @@
         overlay.remove();
         onChange([...workingSelectedIds]);
       });
-      
+
       buttonRow.appendChild(cancelBtn);
       buttonRow.appendChild(doneBtn);
-      
+
       modal.appendChild(title);
       modal.appendChild(searchInput);
       modal.appendChild(resultsContainer);
       modal.appendChild(buttonRow);
       overlay.appendChild(modal);
       document.body.appendChild(overlay);
-      
+
       // Close on overlay click
       overlay.addEventListener("click", (e) => {
         if (e.target === overlay) {
           overlay.remove();
         }
       });
-      
+
       // Focus search input
       setTimeout(() => searchInput.focus(), 100);
     });
   }
 
-  function calculateDealRanges(minPrice, targetPrice, componentType, forcedMaxPrice = null) {
+  function calculateDealRanges(
+    minPrice,
+    targetPrice,
+    componentType,
+    forcedMaxPrice = null,
+  ) {
     let maxPrice = targetPrice;
 
     if (componentType === "amd_cpu") {
@@ -1651,7 +2049,10 @@
     }
 
     if (typeof forcedMaxPrice === "number" && Number.isFinite(forcedMaxPrice)) {
-      maxPrice = Math.max(targetPrice, Math.max(minPrice, Math.floor(forcedMaxPrice)));
+      maxPrice = Math.max(
+        targetPrice,
+        Math.max(minPrice, Math.floor(forcedMaxPrice)),
+      );
     }
 
     const greatEnd = targetPrice - 1;
@@ -1671,13 +2072,15 @@
         fire_deal: { start: fireStart, end: fireEnd },
         great_deal: { start: greatStart, end: greatEnd },
         good_deal: { start: goodStart, end: goodEnd },
-        ok_deal: { start: okStart, end: okEnd }
-      }
+        ok_deal: { start: okStart, end: okEnd },
+      },
     };
   }
 
   function applyAutoGeneratedRanges() {
-    const componentType = autoComponentTypeEl ? autoComponentTypeEl.value : "custom";
+    const componentType = autoComponentTypeEl
+      ? autoComponentTypeEl.value
+      : "custom";
     const generated = generateKeywordFromComponent(
       componentType,
       autoComponentState[componentType],
@@ -1693,15 +2096,22 @@
     const suggestedMinPrice = getSuggestedMinPrice(targetPrice).minPrice;
     const minInputValue = autoMinPriceEl.value.trim();
     const maxInputValue = autoMaxPriceEl.value.trim();
-    const minPrice = minInputValue === "" ? suggestedMinPrice : (parseInt(minInputValue, 10) || 0);
-    const maxPriceOverride = maxInputValue === "" ? null : (parseInt(maxInputValue, 10) || 0);
+    const minPrice =
+      minInputValue === ""
+        ? suggestedMinPrice
+        : parseInt(minInputValue, 10) || 0;
+    const maxPriceOverride =
+      maxInputValue === "" ? null : parseInt(maxInputValue, 10) || 0;
 
     if (targetPrice <= 0) {
       setStatus("Please enter a valid target price", "error");
       return;
     }
 
-    if (currentKeywordIndex === null || currentKeywordIndex >= state.pings[selectedPingIndex].items.length) {
+    if (
+      currentKeywordIndex === null ||
+      currentKeywordIndex >= state.pings[selectedPingIndex].items.length
+    ) {
       setStatus("Invalid keyword index", "error");
       return;
     }
@@ -1723,7 +2133,12 @@
     );
     const ranges = preserveExistingRanges
       ? null
-      : calculateDealRanges(Math.max(0, minPrice), targetPrice, componentType, maxPriceOverride);
+      : calculateDealRanges(
+          Math.max(0, minPrice),
+          targetPrice,
+          componentType,
+          maxPriceOverride,
+        );
 
     kwKeyword.mode = originalMode;
     if (originalMode === "query") {
@@ -1746,16 +2161,15 @@
     } else {
       keywordMeta.mode = "typed";
       keywordMeta.component_type = componentType;
-      keywordMeta.component_data = cloneJson(autoComponentState[componentType] || {});
+      keywordMeta.component_data = cloneJson(
+        autoComponentState[componentType] || {},
+      );
     }
 
     closeAutoGenerateModal();
     renderKeywords(ping);
     markPingChanged();
-    setStatus(
-      "Generated deal ranges applied.",
-      "ok"
-    );
+    setStatus("Generated deal ranges applied.", "ok");
   }
 
   function parseFirstMatch(source, pattern, fallback = "") {
@@ -1779,30 +2193,48 @@
       defaults.model = parseFirstMatch(combined, /\b(\d{3,4})\b/, "");
       const friendlyLower = friendly.toLowerCase();
       const keywordLower = keywordText.toLowerCase();
-      if (/ti[\s-]*super/i.test(friendlyLower) || keywordLower.includes("[\\s-]*ti[\\s-]*super\\b)")) {
+      if (
+        /ti[\s-]*super/i.test(friendlyLower) ||
+        keywordLower.includes("[\\s-]*ti[\\s-]*super\\b)")
+      ) {
         defaults.variant = "ti_super";
-      } else if (/\bti\b/i.test(friendlyLower) || keywordLower.includes("[\\s-]*ti\\b(?![\\s-]*super\\b))")) {
+      } else if (
+        /\bti\b/i.test(friendlyLower) ||
+        keywordLower.includes("[\\s-]*ti\\b(?![\\s-]*super\\b))")
+      ) {
         defaults.variant = "ti";
-      } else if (/\bsuper\b/i.test(friendlyLower) || (
-        keywordLower.includes("[\\s-]*super\\b)")
-        && !keywordLower.includes("(?:ti|super)")
-      )) {
+      } else if (
+        /\bsuper\b/i.test(friendlyLower) ||
+        (keywordLower.includes("[\\s-]*super\\b)") &&
+          !keywordLower.includes("(?:ti|super)"))
+      ) {
         defaults.variant = "super";
       } else {
         defaults.variant = "normal";
       }
-      defaults.vram = defaults.variant === "normal" ? parseFirstMatch(combined, /(\d{1,2})\s?GB/i, "") : "";
+      defaults.vram =
+        defaults.variant === "normal"
+          ? parseFirstMatch(combined, /(\d{1,2})\s?GB/i, "")
+          : "";
       return defaults;
     }
 
     if (componentType === "amd_gpu") {
       defaults.model = parseFirstMatch(combined, /\b(\d{4})\b/, "");
-      defaults.variant = /XTX/i.test(combined) ? "xtx" : /\bXT\b/i.test(combined) ? "xt" : "normal";
+      defaults.variant = /XTX/i.test(combined)
+        ? "xtx"
+        : /\bXT\b/i.test(combined)
+          ? "xt"
+          : "normal";
       return defaults;
     }
 
     if (componentType === "amd_cpu") {
-      defaults.ryzen = parseFirstMatch(combined, /Ryzen[\s-]*([3579])/i, defaults.ryzen);
+      defaults.ryzen = parseFirstMatch(
+        combined,
+        /Ryzen[\s-]*([3579])/i,
+        defaults.ryzen,
+      );
       defaults.model = parseFirstMatch(combined, /\b(\d{4,5})\b/, "");
       defaults.suffix = parseFirstMatch(combined, /\b(X3D|X|G|T|F)\b/i, "");
       return defaults;
@@ -1811,16 +2243,24 @@
     if (componentType === "ram") {
       defaults.capacity = parseFirstMatch(combined, /(\d{1,3})\s*GB/i, "");
       defaults.ddr = parseFirstMatch(combined, /(DDR[345])/i, defaults.ddr);
-      defaults.speed = parseFirstMatch(combined, /\b(2\d{3}|3\d{3}|4\d{3}|5\d{3}|6\d{3}|7\d{3})\b/, "");
+      defaults.speed = parseFirstMatch(
+        combined,
+        /\b(2\d{3}|3\d{3}|4\d{3}|5\d{3}|6\d{3}|7\d{3})\b/,
+        "",
+      );
       return defaults;
     }
 
     if (componentType === "nvme_ssd") {
       const gb = parseFirstMatch(combined, /(\d{3,4})\s*(?:GiB|GB|G\b)/i, "");
-      const tb = parseFirstMatch(combined, /(\d(?:\.\d+)?)\s*(?:TiB|TB|T\b)/i, "");
+      const tb = parseFirstMatch(
+        combined,
+        /(\d(?:\.\d+)?)\s*(?:TiB|TB|T\b)/i,
+        "",
+      );
       defaults.gb = gb;
       defaults.tb = tb;
-      defaults.capacity_mode = gb && tb ? "gb_tb" : (tb ? "tb" : "gb");
+      defaults.capacity_mode = gb && tb ? "gb_tb" : tb ? "tb" : "gb";
       return defaults;
     }
 
@@ -1828,13 +2268,20 @@
   }
 
   function applyTypedMetaToKeyword(item, ping, keywordMeta, showError = false) {
-    if (!keywordMeta || keywordMeta.mode !== "typed" || !keywordMeta.component_type) return false;
+    if (
+      !keywordMeta ||
+      keywordMeta.mode !== "typed" ||
+      !keywordMeta.component_type
+    )
+      return false;
     const itemKeyword = ensureItemKeywordConfig(item);
     autoGenerateContext.item_mode = itemKeyword.mode || "poll";
     const componentType = keywordMeta.component_type;
-    const componentData = (keywordMeta.component_data && typeof keywordMeta.component_data === "object")
-      ? keywordMeta.component_data
-      : {};
+    const componentData =
+      keywordMeta.component_data &&
+      typeof keywordMeta.component_data === "object"
+        ? keywordMeta.component_data
+        : {};
     const parsedFallbackData = reverseParseComponentData(item, componentType);
     const normalizedComponentData = {
       ...getDefaultComponentData(componentType),
@@ -1843,7 +2290,10 @@
     };
 
     Object.keys(normalizedComponentData).forEach((key) => {
-      if (isBlankMetaValue(componentData[key]) && !isBlankMetaValue(parsedFallbackData[key])) {
+      if (
+        isBlankMetaValue(componentData[key]) &&
+        !isBlankMetaValue(parsedFallbackData[key])
+      ) {
         normalizedComponentData[key] = parsedFallbackData[key];
       }
     });
@@ -1870,16 +2320,16 @@
 
   function renderBlocklist() {
     blocklistContainer.innerHTML = "";
-    
+
     // Calculate diff
     const currentSet = new Set(state.blocklist);
     const originalSet = new Set(originalBlocklist);
-    
+
     blocklistDiff = {
-      added: state.blocklist.filter(item => !originalSet.has(item)),
-      removed: originalBlocklist.filter(item => !currentSet.has(item))
+      added: state.blocklist.filter((item) => !originalSet.has(item)),
+      removed: originalBlocklist.filter((item) => !currentSet.has(item)),
     };
-    
+
     state.blocklist.forEach((word, index) => {
       const row = document.createElement("div");
       row.className = "blocklist-row";
@@ -1892,29 +2342,31 @@
         ],
         (newValue) => {
           modeValue = newValue;
-          const sanitizedCore = sanitizeBlocklistItem(stripRegexPrefix(input.value));
+          const sanitizedCore = sanitizeBlocklistItem(
+            stripRegexPrefix(input.value),
+          );
           input.value = sanitizedCore;
-          state.blocklist[index] = modeValue === "regex"
-            ? `regexp::${sanitizedCore}`
-            : sanitizedCore;
+          state.blocklist[index] =
+            modeValue === "regex" ? `regexp::${sanitizedCore}` : sanitizedCore;
           updateBlocklistSaveState();
           updateBlocklistDiff();
-        }
+        },
       );
       modeDropdown.container.classList.add("blocklist-mode-select");
-      
+
       const input = document.createElement("input");
       input.type = "text";
       input.value = stripRegexPrefix(word);
       input.addEventListener("input", (e) => {
-        const sanitizedCore = sanitizeBlocklistItem(stripRegexPrefix(e.target.value));
-        state.blocklist[index] = modeValue === "regex"
-          ? `regexp::${sanitizedCore}`
-          : sanitizedCore;
+        const sanitizedCore = sanitizeBlocklistItem(
+          stripRegexPrefix(e.target.value),
+        );
+        state.blocklist[index] =
+          modeValue === "regex" ? `regexp::${sanitizedCore}` : sanitizedCore;
         updateBlocklistSaveState();
         updateBlocklistDiff();
       });
-      
+
       const remove = document.createElement("button");
       remove.className = "danger";
       remove.textContent = "×";
@@ -1923,25 +2375,25 @@
         renderBlocklist();
         updateBlocklistSaveState();
       });
-      
+
       row.appendChild(modeDropdown.container);
       row.appendChild(input);
       row.appendChild(remove);
       blocklistContainer.appendChild(row);
     });
-    
+
     updateBlocklistDiffView();
   }
 
   function updateBlocklistDiff() {
     const currentSet = new Set(state.blocklist);
     const originalSet = new Set(originalBlocklist);
-    
+
     blocklistDiff = {
-      added: state.blocklist.filter(item => !originalSet.has(item)),
-      removed: originalBlocklist.filter(item => !currentSet.has(item))
+      added: state.blocklist.filter((item) => !originalSet.has(item)),
+      removed: originalBlocklist.filter((item) => !currentSet.has(item)),
     };
-    
+
     updateBlocklistDiffView();
   }
 
@@ -1949,38 +2401,41 @@
     const diffView = document.getElementById("blocklistDiffView");
     const diffItems = document.getElementById("blocklistDiffItems");
     const toggleBtn = document.getElementById("btnToggleBlocklistDiff");
-    
+
     if (!diffView || !diffItems || !toggleBtn) return;
-    
-    const hasChanges = blocklistDiff.added.length > 0 || blocklistDiff.removed.length > 0;
-    
+
+    const hasChanges =
+      blocklistDiff.added.length > 0 || blocklistDiff.removed.length > 0;
+
     if (hasChanges) {
       diffView.classList.add("active");
       toggleBtn.style.display = "inline-flex";
-      
+
       diffItems.innerHTML = "";
-      
+
       if (blocklistDiff.removed.length > 0) {
         const header = document.createElement("div");
-        header.style.cssText = "color: var(--danger); font-weight: 600; margin: 8px 0 4px 0; font-size: 0.85rem;";
+        header.style.cssText =
+          "color: var(--danger); font-weight: 600; margin: 8px 0 4px 0; font-size: 0.85rem;";
         header.textContent = "Removed:";
         diffItems.appendChild(header);
-        
-        blocklistDiff.removed.forEach(item => {
+
+        blocklistDiff.removed.forEach((item) => {
           const div = document.createElement("div");
           div.className = "diff-item removed";
           div.innerHTML = `<span class="diff-icon">−</span><span>${escapeHtml(item)}</span>`;
           diffItems.appendChild(div);
         });
       }
-      
+
       if (blocklistDiff.added.length > 0) {
         const header = document.createElement("div");
-        header.style.cssText = "color: var(--ok); font-weight: 600; margin: 8px 0 4px 0; font-size: 0.85rem;";
+        header.style.cssText =
+          "color: var(--ok); font-weight: 600; margin: 8px 0 4px 0; font-size: 0.85rem;";
         header.textContent = "Added:";
         diffItems.appendChild(header);
-        
-        blocklistDiff.added.forEach(item => {
+
+        blocklistDiff.added.forEach((item) => {
           const div = document.createElement("div");
           div.className = "diff-item added";
           div.innerHTML = `<span class="diff-icon">+</span><span>${escapeHtml(item)}</span>`;
@@ -2025,7 +2480,12 @@
     return button;
   }
 
-  function createConfirmDialog(title, message, confirmLabel = "Confirm", style = "primary") {
+  function createConfirmDialog(
+    title,
+    message,
+    confirmLabel = "Confirm",
+    style = "primary",
+  ) {
     return confirmAction(title, message, confirmLabel, style);
   }
 
@@ -2041,38 +2501,79 @@
   function renderSettings() {
     if (!settingsContainer) return;
     settingsContainer.innerHTML = "";
-    
+
     const settingsFields = [
-      { key: "discord_guild_id", label: "Primary Discord Server (Guild) ID", type: "text" },
+      {
+        key: "discord_guild_id",
+        label: "Primary Discord Server (Guild) ID",
+        type: "text",
+      },
       { key: "admin_role_id", label: "Admin Role ID", type: "text" },
-      { key: "logger_webhook_ping", label: "Logger Webhook Ping Role/User ID", type: "text" },
-      { key: "poll_interval_seconds", label: "Poll Interval (Seconds)", type: "number" },
+      {
+        key: "logger_webhook_ping",
+        label: "Logger Webhook Ping Role/User ID",
+        type: "text",
+      },
+      {
+        key: "poll_interval_seconds",
+        label: "Poll Interval (Seconds)",
+        type: "number",
+      },
       { key: "start_on_command", label: "Start on Command", type: "checkbox" },
-      { key: "bot_debug_commands", label: "Enable Bot Debug Commands", type: "checkbox" },
+      {
+        key: "bot_debug_commands",
+        label: "Enable Bot Debug Commands",
+        type: "checkbox",
+      },
       { key: "debug_mode", label: "Debug Mode", type: "checkbox" },
-      { key: "discord_py_debug_mode", label: "Discord.py Debug Mode", type: "checkbox" },
-      { key: "log_api_responses", label: "Log API Responses", type: "checkbox" },
-      { key: "ping_for_warnings", label: "Ping for Scraper Warnings", type: "checkbox" },
-      { key: "include_shipping_in_deal_evaluation", label: "Include Shipping in Deal Tiers", type: "checkbox" },
-      { key: "include_shipping_in_price_filters", label: "Include Shipping in Price Filters", type: "checkbox" },
+      {
+        key: "discord_py_debug_mode",
+        label: "Discord.py Debug Mode",
+        type: "checkbox",
+      },
+      {
+        key: "log_api_responses",
+        label: "Log API Responses",
+        type: "checkbox",
+      },
+      {
+        key: "ping_for_warnings",
+        label: "Ping for Scraper Warnings",
+        type: "checkbox",
+      },
+      {
+        key: "include_shipping_in_deal_evaluation",
+        label: "Include Shipping in Deal Tiers",
+        type: "checkbox",
+      },
+      {
+        key: "include_shipping_in_price_filters",
+        label: "Include Shipping in Price Filters",
+        type: "checkbox",
+      },
       { key: "file_logging", label: "Enable File Logging", type: "checkbox" },
       { key: "config_editor_host", label: "Config Editor Host", type: "text" },
-      { key: "config_editor_port", label: "Config Editor Port", type: "number" },
+      {
+        key: "config_editor_port",
+        label: "Config Editor Port",
+        type: "number",
+      },
     ];
 
     const grid = document.createElement("div");
     grid.className = "grid";
 
-    settingsFields.forEach(field => {
+    settingsFields.forEach((field) => {
       const wrapper = document.createElement("div");
-      wrapper.className = field.type === "checkbox" ? "field checkbox-field" : "field half";
-      
+      wrapper.className =
+        field.type === "checkbox" ? "field checkbox-field" : "field half";
+
       const label = document.createElement("label");
       label.textContent = field.label;
-      
+
       const input = document.createElement("input");
       input.type = field.type;
-      
+
       if (field.type === "checkbox") {
         input.checked = !!state[field.key];
         input.addEventListener("change", () => {
@@ -2083,23 +2584,31 @@
         wrapper.appendChild(label);
       } else {
         input.value = state[field.key] ?? "";
-        
+
         // Add datalist for Admin Role if possible
-        if (field.key === "admin_role_id" && discordMetadata && discordMetadata.ready) {
-            const listId = "list_admin_role";
-            input.setAttribute("list", listId);
-            const dl = document.createElement("datalist");
-            dl.id = listId;
-            discordMetadata.guilds.forEach(guild => {
-                if (state.discord_guild_id && String(guild.id) !== String(state.discord_guild_id)) return;
-                guild.roles.forEach(r => {
-                    const opt = document.createElement("option");
-                    opt.value = r.id;
-                    opt.textContent = `${r.name} (${guild.name})`;
-                    dl.appendChild(opt);
-                });
+        if (
+          field.key === "admin_role_id" &&
+          discordMetadata &&
+          discordMetadata.ready
+        ) {
+          const listId = "list_admin_role";
+          input.setAttribute("list", listId);
+          const dl = document.createElement("datalist");
+          dl.id = listId;
+          discordMetadata.guilds.forEach((guild) => {
+            if (
+              state.discord_guild_id &&
+              String(guild.id) !== String(state.discord_guild_id)
+            )
+              return;
+            guild.roles.forEach((r) => {
+              const opt = document.createElement("option");
+              opt.value = r.id;
+              opt.textContent = `${r.name} (${guild.name})`;
+              dl.appendChild(opt);
             });
-            document.body.appendChild(dl);
+          });
+          document.body.appendChild(dl);
         }
 
         input.addEventListener("input", () => {
@@ -2186,8 +2695,63 @@
       wrapper.appendChild(trigger);
       grid.appendChild(wrapper);
     });
-    
+
     settingsContainer.appendChild(grid);
+    renderChangelog();
+  }
+
+  function renderChangelog() {
+    if (!changelogContainer) return;
+    changelogContainer.innerHTML = "";
+
+    const changelog = Array.isArray(state?.changelog) ? state.changelog : [];
+    if (changelog.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "hint";
+      empty.textContent = "No changelog entries yet.";
+      changelogContainer.appendChild(empty);
+      return;
+    }
+
+    const list = document.createElement("div");
+    list.style.display = "grid";
+    list.style.gap = "8px";
+
+    changelog.forEach((entry, index) => {
+      const item = document.createElement("div");
+      item.className = "surface nested";
+      item.style.padding = "10px";
+      item.style.borderRadius = "10px";
+
+      const version = String(entry?.version || "unknown");
+      const level = String(entry?.level || "patch");
+      const note = String(entry?.note || "");
+      const timestamp = entry?.timestamp ? String(entry.timestamp) : "unknown time";
+      const latest = !!entry?.latest;
+
+      const heading = document.createElement("div");
+      heading.style.display = "flex";
+      heading.style.justifyContent = "space-between";
+      heading.style.alignItems = "center";
+      heading.style.gap = "8px";
+      heading.innerHTML = `<strong>${version}</strong><span class="hint">${level.toUpperCase()}${latest ? " • LATEST" : ""}</span>`;
+
+      const noteEl = document.createElement("p");
+      noteEl.textContent = note || "(no note)";
+      noteEl.style.marginTop = "6px";
+
+      const meta = document.createElement("p");
+      meta.className = "hint";
+      meta.style.marginTop = "6px";
+      meta.textContent = `${timestamp} • Entry #${index + 1}`;
+
+      item.appendChild(heading);
+      item.appendChild(noteEl);
+      item.appendChild(meta);
+      list.appendChild(item);
+    });
+
+    changelogContainer.appendChild(list);
   }
 
   function renderRoleGroups() {
@@ -2196,7 +2760,8 @@
 
     const getDiscordRoleNameById = (roleId) => {
       const target = String(roleId || "").trim();
-      if (!target || !discordMetadata || !Array.isArray(discordMetadata.guilds)) return "";
+      if (!target || !discordMetadata || !Array.isArray(discordMetadata.guilds))
+        return "";
       for (const guild of discordMetadata.guilds) {
         const roles = Array.isArray(guild.roles) ? guild.roles : [];
         const found = roles.find((r) => String(r.id) === target);
@@ -2211,10 +2776,10 @@
       const card = document.createElement("div");
       card.className = "surface nested card";
       card.style.marginBottom = "20px";
-      
+
       const header = document.createElement("header");
       header.className = "card-head";
-      
+
       const titleInput = document.createElement("input");
       titleInput.type = "text";
       titleInput.value = group.title || "";
@@ -2224,10 +2789,10 @@
         group.title = e.target.value;
         updateRolesSaveState();
       });
-      
+
       const actions = document.createElement("div");
       actions.className = "button-row";
-      
+
       const addBtn = document.createElement("button");
       addBtn.className = "tonal";
       addBtn.textContent = "+ Role";
@@ -2237,36 +2802,50 @@
         renderRoleGroups();
         updateRolesSaveState();
       });
-      
+
       const removeBtn = document.createElement("button");
       removeBtn.className = "danger";
       removeBtn.textContent = "Remove Group";
       removeBtn.addEventListener("click", async () => {
-        if (await confirmAction("Remove Group", `Delete "${group.title || 'Untitled Group'}"?`, "Delete", "danger")) {
+        if (
+          await confirmAction(
+            "Remove Group",
+            `Delete "${group.title || "Untitled Group"}"?`,
+            "Delete",
+            "danger",
+          )
+        ) {
           state.self_roles.splice(gIndex, 1);
           renderRoleGroups();
           updateRolesSaveState();
         }
       });
-      
+
       actions.appendChild(addBtn);
       actions.appendChild(removeBtn);
       header.appendChild(titleInput);
       header.appendChild(actions);
       card.appendChild(header);
-      
+
       const rolesList = document.createElement("div");
       rolesList.className = "list-editor-container";
       rolesList.style.background = "transparent";
       rolesList.style.border = "none";
       rolesList.style.padding = "0";
-           if (Array.isArray(group.roles)) {
+      if (Array.isArray(group.roles)) {
         group.roles.forEach((role, rIndex) => {
-          const normalizedRole = (role && typeof role === "object") ? role : {};
-          let resolvedName = normalizedRole.name ?? normalizedRole.display_name ?? "";
-          let resolvedId = normalizedRole.id ?? normalizedRole.role_id ?? normalizedRole.roleId ?? "";
+          const normalizedRole = role && typeof role === "object" ? role : {};
+          let resolvedName =
+            normalizedRole.name ?? normalizedRole.display_name ?? "";
+          let resolvedId =
+            normalizedRole.id ??
+            normalizedRole.role_id ??
+            normalizedRole.roleId ??
+            "";
 
-          const linkedByRole = state.pings.find((p) => String(p.role) === String(resolvedId));
+          const linkedByRole = state.pings.find(
+            (p) => String(p.role) === String(resolvedId),
+          );
           if (linkedByRole) {
             if (!String(resolvedName || "").trim()) {
               resolvedName = linkedByRole.category_name || "";
@@ -2276,15 +2855,22 @@
             }
           }
 
-          if (!String(resolvedName || "").trim() && normalizedRole.linked_ping_index != null) {
-            const linkedPing = state.pings[Number(normalizedRole.linked_ping_index)];
+          if (
+            !String(resolvedName || "").trim() &&
+            normalizedRole.linked_ping_index != null
+          ) {
+            const linkedPing =
+              state.pings[Number(normalizedRole.linked_ping_index)];
             if (linkedPing) {
               resolvedName = linkedPing.category_name || resolvedName;
               resolvedId = linkedPing.role || resolvedId;
             }
           }
 
-          group.roles[rIndex] = { name: String(resolvedName || ""), id: String(resolvedId || "") };
+          group.roles[rIndex] = {
+            name: String(resolvedName || ""),
+            id: String(resolvedId || ""),
+          };
           const currentRole = group.roles[rIndex];
 
           const row = document.createElement("div");
@@ -2293,9 +2879,10 @@
           const linkField = document.createElement("div");
           linkField.className = "role-cell role-link-cell";
           const linkLabel = document.createElement("label");
-          linkLabel.textContent = "Linked Category (ping that this entry is linked to)";
+          linkLabel.textContent =
+            "Linked Category (ping that this entry is linked to)";
           linkLabel.className = "role-cell-label";
-          
+
           const pingSelect = document.createElement("select");
           const defaultOpt = document.createElement("option");
           defaultOpt.value = "";
@@ -2303,7 +2890,7 @@
           pingSelect.appendChild(defaultOpt);
           let selectedPingIndexByName = -1;
           let selectedPingIndexById = -1;
-          
+
           state.pings.forEach((p, pIdx) => {
             const opt = document.createElement("option");
             opt.value = pIdx;
@@ -2312,10 +2899,16 @@
             opt.textContent = roleName
               ? `${pingName} (@${roleName} • ${String(p.role || "")})`
               : pingName;
-            if (selectedPingIndexByName === -1 && String(pingName) === String(currentRole.name || "")) {
+            if (
+              selectedPingIndexByName === -1 &&
+              String(pingName) === String(currentRole.name || "")
+            ) {
               selectedPingIndexByName = pIdx;
             }
-            if (selectedPingIndexById === -1 && String(p.role) === String(currentRole.id)) {
+            if (
+              selectedPingIndexById === -1 &&
+              String(p.role) === String(currentRole.id)
+            ) {
               selectedPingIndexById = pIdx;
             }
             pingSelect.appendChild(opt);
@@ -2328,7 +2921,7 @@
           } else {
             pingSelect.value = "";
           }
-          
+
           pingSelect.addEventListener("change", () => {
             const selectedPing = state.pings[Number(pingSelect.value)];
             if (selectedPing) {
@@ -2356,7 +2949,7 @@
           });
           nameField.appendChild(nameLabel);
           nameField.appendChild(nameInput);
-          
+
           const delBtn = document.createElement("button");
           delBtn.className = "danger";
           delBtn.textContent = "×";
@@ -2365,14 +2958,14 @@
             renderRoleGroups();
             updateRolesSaveState();
           });
-          
+
           row.appendChild(linkField);
           row.appendChild(nameField);
           row.appendChild(delBtn);
           rolesList.appendChild(row);
         });
       }
-      
+
       card.appendChild(rolesList);
       roleGroupsContainer.appendChild(card);
     });
@@ -2382,7 +2975,8 @@
     if (message.type === "state") {
       state = message.parsed || {};
       originalState = JSON.parse(JSON.stringify(state));
-      state.editor_metadata = message.editor_metadata || state.editor_metadata || { version: 1, pings: [] };
+      state.editor_metadata = message.editor_metadata ||
+        state.editor_metadata || { version: 1, pings: [] };
       originalState.editor_metadata = cloneJson(state.editor_metadata);
       // Global blocklist is provided separately by the server.
       if (Array.isArray(message.global_blocklist)) {
@@ -2402,9 +2996,13 @@
       ensureEditorMetadataForAllPings();
       if (message.discord_metadata) {
         discordMetadata = message.discord_metadata;
-        
+
         // If the backend bot hasn't loaded guilds yet, request state again shortly (just once)
-        if (discordMetadata.guilds && discordMetadata.guilds.length === 0 && !hasRetriedGuilds) {
+        if (
+          discordMetadata.guilds &&
+          discordMetadata.guilds.length === 0 &&
+          !hasRetriedGuilds
+        ) {
           hasRetriedGuilds = true;
           setTimeout(() => {
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -2422,7 +3020,10 @@
         renderBackupList(message.backups);
       }
 
-      selectedPingIndex = Math.min(selectedPingIndex, Math.max(0, state.pings.length - 1));
+      selectedPingIndex = Math.min(
+        selectedPingIndex,
+        Math.max(0, state.pings.length - 1),
+      );
       renderPingList();
       renderPingDetails();
       markPingSaved();
@@ -2430,7 +3031,7 @@
       const btnDiscard = document.getElementById("btnDiscard");
       if (btnDiscard) btnDiscard.classList.remove("loading");
       setStatus(`Connected • Config Loaded`, "ok");
-      
+
       // Handle pending ping switch after state loads
       if (window.pendingPingSwitch !== undefined) {
         performSwitch(window.pendingPingSwitch);
@@ -2441,7 +3042,8 @@
 
     if (message.type === "saved") {
       const keepBlocklist = state?.blocklist;
-      const keepEditorMetadata = message.editor_metadata || state?.editor_metadata;
+      const keepEditorMetadata =
+        message.editor_metadata || state?.editor_metadata;
       state = message.parsed || state;
       if (Array.isArray(keepBlocklist)) {
         state.blocklist = keepBlocklist;
@@ -2456,6 +3058,12 @@
       renderPingDetails();
       markPingSaved();
       setStatus(message.message || "Saved", "ok");
+
+      // Handle pending ping switch after a successful save.
+      if (window.pendingPingSwitch !== undefined) {
+        performSwitch(window.pendingPingSwitch);
+        delete window.pendingPingSwitch;
+      }
       return;
     }
 
@@ -2544,7 +3152,7 @@
 
   async function loadEbayCategories() {
     if (ebayCategories.length > 0) return;
-    
+
     try {
       const response = await fetch("/static/categories.json");
       if (response.ok) {
@@ -2560,7 +3168,7 @@
 
   function highlightInvalidFields(errorFields) {
     // Highlight input fields that have errors
-    errorFields.forEach(field => {
+    errorFields.forEach((field) => {
       const element = document.querySelector(`[data-field="${field}"]`);
       if (element) {
         element.classList.add("invalid");
@@ -2571,70 +3179,80 @@
 
   function validatePingForSave(ping, index) {
     const errors = [];
-    
+
     // Validate required fields
     if (!ping.category_name || !ping.category_name.trim()) {
       errors.push(`Ping ${index + 1}: Category name is required`);
     }
-    
+
     if (!ping.channel_id || ping.channel_id === "" || ping.channel_id === 0) {
       errors.push(`Ping ${index + 1}: Channel ID is required`);
     }
-    
+
     if (!ping.role || ping.role === "" || ping.role === 0) {
       errors.push(`Ping ${index + 1}: Role ID is required`);
     }
-    
+
     // Validate price ranges
     ping.items.forEach((keyword, kIndex) => {
       if (keyword.min_price !== null && keyword.max_price !== null) {
         if (keyword.min_price > keyword.max_price) {
-          errors.push(`Ping ${index + 1}, Item ${kIndex + 1}: Min price cannot be greater than max price`);
+          errors.push(
+            `Ping ${index + 1}, Item ${kIndex + 1}: Min price cannot be greater than max price`,
+          );
         }
       }
       if (keyword.target_price !== null && keyword.max_price !== null) {
         if (keyword.target_price > keyword.max_price) {
-          errors.push(`Ping ${index + 1}, Item ${kIndex + 1}: Target price cannot be greater than max price`);
+          errors.push(
+            `Ping ${index + 1}, Item ${kIndex + 1}: Target price cannot be greater than max price`,
+          );
         }
       }
       if (keyword.target_price !== null && keyword.min_price !== null) {
         if (keyword.target_price < keyword.min_price) {
-          errors.push(`Ping ${index + 1}, Item ${kIndex + 1}: Target price cannot be below min price`);
+          errors.push(
+            `Ping ${index + 1}, Item ${kIndex + 1}: Target price cannot be below min price`,
+          );
         }
       }
-      
+
       // Validate deal ranges are in order
       if (keyword.deal_ranges) {
         const fireEnd = keyword.deal_ranges.fire_deal?.end || 0;
         const greatEnd = keyword.deal_ranges.great_deal?.end || 0;
         const goodEnd = keyword.deal_ranges.good_deal?.end || 0;
-        
+
         if (fireEnd > greatEnd) {
-          errors.push(`Ping ${index + 1}, Item ${kIndex + 1}: Fire deal end must be <= Great deal end`);
+          errors.push(
+            `Ping ${index + 1}, Item ${kIndex + 1}: Fire deal end must be <= Great deal end`,
+          );
         }
         if (greatEnd > goodEnd) {
-          errors.push(`Ping ${index + 1}, Item ${kIndex + 1}: Great deal end must be <= Good deal end`);
+          errors.push(
+            `Ping ${index + 1}, Item ${kIndex + 1}: Great deal end must be <= Good deal end`,
+          );
         }
       }
     });
-    
+
     return errors;
   }
 
   function validateStateForSave() {
     const allErrors = [];
-    
+
     if (!state || !state.pings) {
       return [{ field: "pings", message: "Pings array is missing" }];
     }
-    
+
     state.pings.forEach((ping, index) => {
       const pingErrors = validatePingForSave(ping, index);
-      pingErrors.forEach(error => {
+      pingErrors.forEach((error) => {
         allErrors.push({ field: `ping_${index}`, message: error });
       });
     });
-    
+
     return allErrors;
   }
 
@@ -2687,7 +3305,9 @@
     return {
       mode: autoFirst ? "typed" : "manual",
       component_type: componentType,
-      component_data: componentType ? getDefaultComponentData(componentType) : {},
+      component_data: componentType
+        ? getDefaultComponentData(componentType)
+        : {},
     };
   }
 
@@ -2701,7 +3321,10 @@
     }
 
     state.pings.forEach((ping, pingIndex) => {
-      if (!state.editor_metadata.pings[pingIndex] || typeof state.editor_metadata.pings[pingIndex] !== "object") {
+      if (
+        !state.editor_metadata.pings[pingIndex] ||
+        typeof state.editor_metadata.pings[pingIndex] !== "object"
+      ) {
         state.editor_metadata.pings[pingIndex] = { items: [] };
       }
       const pingMeta = state.editor_metadata.pings[pingIndex];
@@ -2721,10 +3344,16 @@
         if (existing.mode !== "manual" && existing.mode !== "typed") {
           existing.mode = "manual";
         }
-        if (existing.component_type !== null && typeof existing.component_type !== "string") {
+        if (
+          existing.component_type !== null &&
+          typeof existing.component_type !== "string"
+        ) {
           existing.component_type = null;
         }
-        if (!existing.component_data || typeof existing.component_data !== "object") {
+        if (
+          !existing.component_data ||
+          typeof existing.component_data !== "object"
+        ) {
           existing.component_data = {};
         }
       });
@@ -2765,6 +3394,96 @@
     return { minValue, maxValue };
   }
 
+  function clampNonNegativeInteger(value) {
+    return Math.max(0, Math.round(toNumberOrZero(value)));
+  }
+
+  function autoCorrectKeywordPrices(keyword) {
+    if (!keyword || typeof keyword !== "object") return null;
+
+    const original = {
+      min: keyword.min_price,
+      max: keyword.max_price,
+      target: keyword.target_price,
+    };
+
+    const minHasValue = keyword.min_price !== null && keyword.min_price !== "";
+    const maxHasValue = keyword.max_price !== null && keyword.max_price !== "";
+    const targetHasValue =
+      keyword.target_price !== null && keyword.target_price !== "";
+
+    let min = minHasValue ? clampNonNegativeInteger(keyword.min_price) : null;
+    let max = maxHasValue ? clampNonNegativeInteger(keyword.max_price) : null;
+    let target = targetHasValue
+      ? clampNonNegativeInteger(keyword.target_price)
+      : null;
+
+    if (min !== null && max !== null && min > max) {
+      max = min;
+    }
+
+    if (target !== null && min !== null && target < min) {
+      target = min;
+    }
+
+    if (target !== null && max !== null && target > max) {
+      max = target;
+    }
+
+    keyword.min_price = min;
+    keyword.max_price = max;
+    keyword.target_price = target;
+
+    validateKeywordPrices(keyword);
+
+    const changed =
+      original.min !== keyword.min_price ||
+      original.max !== keyword.max_price ||
+      original.target !== keyword.target_price;
+
+    if (!changed) return null;
+
+    const minDisplay = keyword.min_price ?? "unset";
+    const maxDisplay = keyword.max_price ?? "unset";
+    const targetDisplay = keyword.target_price ?? "unset";
+    return `Auto-corrected prices to min=${minDisplay}, target=${targetDisplay}, max=${maxDisplay}.`;
+  }
+
+  function shiftKeywordPrices(keyword, delta) {
+    if (!keyword || typeof keyword !== "object") return;
+    const amount = clampNonNegativeInteger(Math.abs(delta));
+    const direction = delta >= 0 ? 1 : -1;
+    const signed = amount * direction;
+
+    const shiftField = (fieldName) => {
+      if (
+        keyword[fieldName] === null ||
+        keyword[fieldName] === undefined ||
+        keyword[fieldName] === ""
+      ) {
+        return;
+      }
+      keyword[fieldName] = Math.max(
+        0,
+        clampNonNegativeInteger(keyword[fieldName]) + signed,
+      );
+    };
+
+    shiftField("min_price");
+    shiftField("target_price");
+    shiftField("max_price");
+
+    if (keyword.deal_ranges) {
+      ["fire_deal", "great_deal", "good_deal"].forEach((tierName) => {
+        const tier = keyword.deal_ranges[tierName];
+        if (!tier) return;
+        tier.end = Math.max(0, clampNonNegativeInteger(tier.end) + signed);
+      });
+    }
+
+    autoCorrectKeywordPrices(keyword);
+  }
+
   function getItemPriceValidationMessage(item) {
     const min = item.min_price;
     const max = item.max_price;
@@ -2784,7 +3503,10 @@
 
   function validateKeywordPrices(keyword) {
     // Ensure min_price <= max_price
-    if (typeof keyword.min_price === "number" && typeof keyword.max_price === "number") {
+    if (
+      typeof keyword.min_price === "number" &&
+      typeof keyword.max_price === "number"
+    ) {
       if (keyword.min_price > keyword.max_price) {
         keyword.max_price = keyword.min_price;
       }
@@ -2801,9 +3523,18 @@
       const min = keyword.min_price ?? 0;
       const sorted = [fireEnd, greatEnd, goodEnd].sort((a, b) => a - b);
 
-      keyword.deal_ranges.fire_deal.end = Math.max(min, Math.min(max, sorted[0]));
-      keyword.deal_ranges.great_deal.end = Math.max(min, Math.min(max, sorted[1]));
-      keyword.deal_ranges.good_deal.end = Math.max(min, Math.min(max, sorted[2]));
+      keyword.deal_ranges.fire_deal.end = Math.max(
+        min,
+        Math.min(max, sorted[0]),
+      );
+      keyword.deal_ranges.great_deal.end = Math.max(
+        min,
+        Math.min(max, sorted[1]),
+      );
+      keyword.deal_ranges.good_deal.end = Math.max(
+        min,
+        Math.min(max, sorted[2]),
+      );
     }
   }
 
@@ -2846,19 +3577,18 @@
     track.className = "tier-track";
 
     const markerDefs = [
-      { key: "min", label: "Min", cls: "min" },
-      { key: "fire", label: "Fire", cls: "fire" },
-      { key: "great", label: "Great", cls: "great" },
-      { key: "good", label: "Good", cls: "good" },
-      { key: "max", label: "Max", cls: "max" },
+      { key: "min", label: "Min", cls: "min", emoji: "⬇️" },
+      { key: "fire", label: "Fire", cls: "fire", emoji: "🔥" },
+      { key: "great", label: "Great", cls: "great", emoji: "🟢" },
+      { key: "good", label: "Good", cls: "good", emoji: "🟡" },
+      { key: "max", label: "Max", cls: "max", emoji: "🏁" },
     ];
 
     const markerEls = [];
     markerDefs.forEach((markerDef) => {
       const marker = document.createElement("div");
       marker.className = `tier-marker ${markerDef.cls}`;
-      // Add value span for displaying actual price
-      marker.innerHTML = `<span class="tier-icon">${markerDef.label.charAt(0)}</span><span class="tier-label">${markerDef.label}</span><span class="tier-value">$0</span>`;
+      marker.innerHTML = `<span class="tier-icon">${markerDef.emoji}</span><span class="tier-label">${markerDef.label}</span><span class="tier-value">$0</span>`;
       track.appendChild(marker);
       markerEls.push(marker);
     });
@@ -2887,7 +3617,7 @@
 
       const numberLabel = document.createElement("label");
       numberLabel.className = "tier-number-label";
-      numberLabel.innerHTML = `<span class="tier-icon ${markerDef.cls}">${markerDef.label.charAt(0)}</span>${markerDef.label}`;
+      numberLabel.innerHTML = `<span class="tier-icon ${markerDef.cls}">${markerDef.emoji}</span>${markerDef.label}`;
 
       const numberInput = document.createElement("input");
       numberInput.type = "number";
@@ -2912,7 +3642,10 @@
       }
 
       for (let i = 0; i < thresholds.length; i += 1) {
-        thresholds[i] = Math.max(minValue, Math.min(maxValue, Math.round(thresholds[i])));
+        thresholds[i] = Math.max(
+          minValue,
+          Math.min(maxValue, Math.round(thresholds[i])),
+        );
       }
     }
 
@@ -2939,51 +3672,67 @@
       keyword.deal_ranges.ok_deal.end = maxValue;
 
       if (typeof keyword.target_price === "number") {
-        keyword.target_price = Math.max(minValue, Math.min(maxValue, keyword.target_price));
+        keyword.target_price = Math.max(
+          minValue,
+          Math.min(maxValue, keyword.target_price),
+        );
       }
     }
 
-    // Use piecewise linear scaling for better distribution across all price ranges
-    // This gives more visual space to HIGHER tiers where the deals are
-    const range = maxValue - minValue;
-    
+    // Use linear scaling with an adaptive compressed lower region.
+    // This keeps spacing intuitive while avoiding right-side handle crowding
+    // when min is far below the active deal thresholds.
+    const fireEndForDisplay = thresholds[0];
+    const fireSpan = Math.max(0, fireEndForDisplay - minValue);
+    const totalSpan = Math.max(1, maxValue - minValue);
+    const fireSpanRatio = fireSpan / totalSpan;
+
+    // Adaptive compression window:
+    // As price levels increase, show a smaller fraction of the fire span.
+    // This keeps high-price items (e.g., 5090-class ranges) from feeling too stretched.
+    let fireVisibleFraction = 0.1;
+    if (maxValue > 2500) {
+      fireVisibleFraction = 0.03;
+    } else if (maxValue > 1500) {
+      fireVisibleFraction = 0.04;
+    } else if (maxValue > 800) {
+      fireVisibleFraction = 0.06;
+    } else if (maxValue > 300) {
+      fireVisibleFraction = 0.08;
+    }
+
+    // If fire span is most of the total range, compress a bit more.
+    if (fireSpanRatio > 0.7) {
+      fireVisibleFraction *= 0.7;
+    } else if (fireSpanRatio > 0.55) {
+      fireVisibleFraction *= 0.85;
+    }
+    fireVisibleFraction = Math.max(0.015, fireVisibleFraction);
+
+    const rawCompressedFloor =
+      fireEndForDisplay - fireSpan * fireVisibleFraction;
+    const displayMin =
+      fireEndForDisplay > minValue
+        ? Math.min(
+            fireEndForDisplay - 1,
+            Math.max(minValue, Math.round(rawCompressedFloor)),
+          )
+        : minValue;
+    const displayRange = Math.max(1, maxValue - displayMin);
+
     function pctFromValue(value) {
-      if (maxValue <= minValue) {
-        return value <= minValue ? 0 : 100;
+      if (maxValue <= displayMin) {
+        return value <= displayMin ? 0 : 100;
       }
-      
-      const normalized = (value - minValue) / range;
-      
-      // Piecewise linear: give MORE space to higher tiers (where deals are)
-      // Bottom 30% of price range gets only 10% of visual space
-      // Next 30% gets 15% of visual space
-      // Next 20% gets 25% of visual space
-      // Top 20% gets 50% of visual space (where the good deals are!)
-      if (normalized < 0.3) {
-        return normalized * (10 / 0.3);
-      } else if (normalized < 0.6) {
-        return 10 + (normalized - 0.3) * (15 / 0.3);
-      } else if (normalized < 0.8) {
-        return 25 + (normalized - 0.6) * (25 / 0.2);
-      } else {
-        return 50 + (normalized - 0.8) * (50 / 0.2);
-      }
+
+      if (value <= displayMin) return 0;
+      if (value >= maxValue) return 100;
+      return ((value - displayMin) / displayRange) * 100;
     }
 
     function valueFromPct(pct) {
-      // Reverse the piecewise linear mapping
-      let normalized;
-      if (pct < 10) {
-        normalized = (pct / 10) * 0.3;
-      } else if (pct < 25) {
-        normalized = 0.3 + ((pct - 10) / 15) * 0.3;
-      } else if (pct < 50) {
-        normalized = 0.6 + ((pct - 25) / 25) * 0.2;
-      } else {
-        normalized = 0.8 + ((pct - 50) / 50) * 0.2;
-      }
-      
-      return Math.round(minValue + range * normalized);
+      const boundedPct = Math.max(0, Math.min(100, pct));
+      return Math.round(displayMin + (displayRange * boundedPct) / 100);
     }
 
     function syncUi(markDirty = true) {
@@ -2996,7 +3745,7 @@
       });
 
       const pct = [
-        pctFromValue(minValue),
+        pctFromValue(displayMin),
         pctFromValue(thresholds[0]),
         pctFromValue(thresholds[1]),
         pctFromValue(thresholds[2]),
@@ -3008,7 +3757,13 @@
       track.style.setProperty("--p3", `${pct[3]}%`);
       track.style.setProperty("--p4", `${pct[4]}%`);
 
-      const valuesToShow = [minValue, thresholds[0], thresholds[1], thresholds[2], maxValue];
+      const valuesToShow = [
+        minValue,
+        thresholds[0],
+        thresholds[1],
+        thresholds[2],
+        maxValue,
+      ];
       markerEls.forEach((marker, index) => {
         marker.style.left = `${pct[index]}%`;
         // Update marker to show actual price value
@@ -3026,7 +3781,7 @@
     }
 
     sliderInputs.forEach((slider, index) => {
-      slider.addEventListener("change", () => {
+      slider.addEventListener("input", () => {
         thresholds[index] = valueFromPct(Number(slider.value) / 10);
         normalizeThresholds(index);
         syncUi();
@@ -3055,12 +3810,14 @@
 
     const trigger = document.createElement("div");
     trigger.className = "select-trigger";
-    
+
     const updateLabel = () => {
       if (!selectedValues || selectedValues.length === 0) {
         trigger.textContent = placeholder;
       } else {
-        trigger.textContent = selectedValues.map(v => toTitleCase(v.replace("_", " "))).join(", ");
+        trigger.textContent = selectedValues
+          .map((v) => toTitleCase(v.replace("_", " ")))
+          .join(", ");
       }
     };
     updateLabel();
@@ -3068,7 +3825,7 @@
     const menu = document.createElement("div");
     menu.className = "select-menu";
 
-    options.forEach(option => {
+    options.forEach((option) => {
       const item = document.createElement("label");
       item.className = "checkbox-item";
       const cb = document.createElement("input");
@@ -3085,7 +3842,9 @@
         onChange([...selectedValues]);
       });
       item.appendChild(cb);
-      item.appendChild(document.createTextNode((" " + toTitleCase(option.replace("_", " ")))));
+      item.appendChild(
+        document.createTextNode(" " + toTitleCase(option.replace("_", " "))),
+      );
       menu.appendChild(item);
     });
 
@@ -3093,7 +3852,9 @@
       e.stopPropagation();
       const isOpen = menu.classList.contains("open");
       // Close all other menus first
-      document.querySelectorAll(".select-menu").forEach(m => m.classList.remove("open"));
+      document
+        .querySelectorAll(".select-menu")
+        .forEach((m) => m.classList.remove("open"));
       if (!isOpen) menu.classList.add("open");
     });
 
@@ -3124,16 +3885,19 @@
     });
   }
 
-  const unsavedChangesOverlayEl = document.getElementById("unsavedChangesOverlay");
+  const unsavedChangesOverlayEl = document.getElementById(
+    "unsavedChangesOverlay",
+  );
   let switchTargetIndex = null;
 
   async function handlePingSwitch(index) {
     if (index === selectedPingIndex) return;
-    
+
     if (hasPendingPingChanges) {
       switchTargetIndex = index;
       const currentPing = state.pings[selectedPingIndex];
-      document.getElementById("unsavedChangesTitle").textContent = `Unsaved: ${currentPing.category_name || "Untitled"}`;
+      document.getElementById("unsavedChangesTitle").textContent =
+        `Unsaved: ${currentPing.category_name || "Untitled"}`;
       unsavedChangesOverlayEl.classList.add("open");
       unsavedChangesOverlayEl.setAttribute("aria-hidden", "false");
     } else {
@@ -3189,45 +3953,51 @@
     backupMetaEl.textContent = `Kind: ${selected.kind} | Updated: ${selected.modified} | Size: ${formatBytes(selected.size)}`;
   }
 
-  function createFieldWithTooltip(labelText, type, cls, tooltipText, fieldName = "") {
+  function createFieldWithTooltip(
+    labelText,
+    type,
+    cls,
+    tooltipText,
+    fieldName = "",
+  ) {
     const wrapper = document.createElement("div");
     wrapper.className = `field ${cls}`;
-    
+
     const labelRow = document.createElement("div");
     labelRow.style.display = "flex";
     labelRow.style.alignItems = "center";
     labelRow.style.gap = "6px";
-    
+
     const label = document.createElement("label");
     label.textContent = labelText;
     labelRow.appendChild(label);
-    
+
     if (tooltipText) {
       const tooltipContainer = document.createElement("div");
       tooltipContainer.className = "tooltip-container";
-      
+
       const tooltipIcon = document.createElement("span");
       tooltipIcon.className = "tooltip-icon";
       tooltipIcon.textContent = "ⓘ";
       tooltipIcon.setAttribute("aria-label", "Help");
-      
+
       const tooltipTextEl = document.createElement("span");
       tooltipTextEl.className = "tooltip-text";
       tooltipTextEl.textContent = tooltipText;
-      
+
       tooltipContainer.appendChild(tooltipIcon);
       tooltipContainer.appendChild(tooltipTextEl);
       labelRow.appendChild(tooltipContainer);
     }
-    
+
     wrapper.appendChild(labelRow);
-    
+
     const input = document.createElement("input");
     input.type = type;
     if (fieldName) {
       input.dataset.field = fieldName;
     }
-    
+
     wrapper.appendChild(input);
     return wrapper;
   }
@@ -3237,7 +4007,8 @@
     keywordCardsEl.innerHTML = "";
 
     if (!state || !state.pings || state.pings.length === 0) {
-      pingFormEl.innerHTML = '<div class="muted">No ping configs. Add one from the sidebar.</div>';
+      pingFormEl.innerHTML =
+        '<div class="muted">No ping configs. Add one from the sidebar.</div>';
       updatePingSaveButtonState();
       return;
     }
@@ -3247,9 +4018,27 @@
     ensureEditorMetadataForAllPings();
 
     const fields = [
-      ["category_name", "Category Name", "text", "full", "The display name for this ping category"],
-      ["channel_id", "Channel", "text", "half", "The Discord channel where listings will be sent"],
-      ["role", "Role", "text", "half", "The Discord role that will be pinged when deals are found"],
+      [
+        "category_name",
+        "Category Name",
+        "text",
+        "full",
+        "The display name for this ping category",
+      ],
+      [
+        "channel_id",
+        "Channel",
+        "text",
+        "half",
+        "The Discord channel where listings will be sent",
+      ],
+      [
+        "role",
+        "Role",
+        "text",
+        "half",
+        "The Discord role that will be pinged when deals are found",
+      ],
     ];
 
     fields.forEach(([key, labelText, type, cls, tooltipText]) => {
@@ -3257,49 +4046,49 @@
         // Special handling for channel/role with custom dropdown
         const wrapper = document.createElement("div");
         wrapper.className = `field ${cls}`;
-        
+
         const labelRow = document.createElement("div");
         labelRow.style.display = "flex";
         labelRow.style.alignItems = "center";
         labelRow.style.gap = "6px";
-        
+
         const label = document.createElement("label");
         label.textContent = labelText;
         labelRow.appendChild(label);
-        
+
         if (tooltipText) {
           const tooltipContainer = document.createElement("div");
           tooltipContainer.className = "tooltip-container";
-          
+
           const tooltipIcon = document.createElement("span");
           tooltipIcon.className = "tooltip-icon";
           tooltipIcon.textContent = "ⓘ";
           tooltipIcon.setAttribute("aria-label", "Help");
-          
+
           const tooltipTextEl = document.createElement("span");
           tooltipTextEl.className = "tooltip-text";
           tooltipTextEl.textContent = tooltipText;
-          
+
           tooltipContainer.appendChild(tooltipIcon);
           tooltipContainer.appendChild(tooltipTextEl);
           labelRow.appendChild(tooltipContainer);
         }
-        
+
         wrapper.appendChild(labelRow);
-        
+
         if (discordMetadata && discordMetadata.ready) {
           const selectWrapper = document.createElement("div");
           selectWrapper.className = "custom-select";
-          
+
           const trigger = document.createElement("div");
           trigger.className = "select-trigger";
-          
+
           const menu = document.createElement("div");
           menu.className = "select-menu";
           menu.style.maxHeight = "300px";
           menu.style.overflowY = "auto";
           menu.style.zIndex = "100";
-          
+
           // Add search input
           const searchInput = document.createElement("input");
           searchInput.type = "text";
@@ -3309,39 +4098,42 @@
           searchInput.style.width = "100%";
           searchInput.style.boxSizing = "border-box";
           menu.appendChild(searchInput);
-          
+
           let selectedItem = null;
           let count = 0;
           let allItems = [];
-          
-          discordMetadata.guilds.forEach(guild => {
+
+          discordMetadata.guilds.forEach((guild) => {
             // Filter by primary guild if set
-            if (state.discord_guild_id && String(guild.id) !== String(state.discord_guild_id)) {
+            if (
+              state.discord_guild_id &&
+              String(guild.id) !== String(state.discord_guild_id)
+            ) {
               return;
             }
-            
+
             const items = key === "channel_id" ? guild.channels : guild.roles;
-            items.forEach(item => {
+            items.forEach((item) => {
               count++;
               allItems.push(item);
             });
           });
-          
+
           const filterItems = (searchTerm) => {
             const term = searchTerm.toLowerCase().trim();
-            menu.querySelectorAll(".channel-role-item").forEach(item => {
+            menu.querySelectorAll(".channel-role-item").forEach((item) => {
               const name = item.dataset.name.toLowerCase();
               const id = item.dataset.id;
               const show = !term || name.includes(term) || id.includes(term);
               item.style.display = show ? "flex" : "none";
             });
           };
-          
+
           searchInput.addEventListener("input", (e) => {
             filterItems(e.target.value);
           });
-          
-          allItems.forEach(item => {
+
+          allItems.forEach((item) => {
             const opt = document.createElement("div");
             opt.className = "channel-role-item";
             opt.style.display = "flex";
@@ -3353,27 +4145,28 @@
             opt.style.transition = "background 0.1s";
             opt.dataset.name = item.name;
             opt.dataset.id = item.id;
-            
-            const titleText = key === "channel_id" ? `#${item.name}` : `@${item.name}`;
-            
+
+            const titleText =
+              key === "channel_id" ? `#${item.name}` : `@${item.name}`;
+
             const title = document.createElement("span");
             title.textContent = titleText;
             title.style.fontWeight = "500";
             title.style.fontSize = "0.88rem";
-            
+
             const subtext = document.createElement("span");
             subtext.textContent = item.id;
             subtext.style.fontSize = "0.75rem";
             subtext.style.opacity = "0.7";
             subtext.style.fontFamily = "monospace";
-            
+
             opt.appendChild(title);
             opt.appendChild(subtext);
-            
+
             if (String(ping[key]) === String(item.id)) {
               selectedItem = { title: titleText, id: item.id };
             }
-            
+
             opt.addEventListener("click", (e) => {
               e.stopPropagation();
               ping[key] = item.id;
@@ -3382,18 +4175,18 @@
               searchInput.value = "";
               markPingChanged();
             });
-            
+
             opt.addEventListener("mouseenter", () => {
               opt.style.background = "var(--surface-muted)";
             });
-            
+
             opt.addEventListener("mouseleave", () => {
               opt.style.background = "transparent";
             });
-            
+
             menu.appendChild(opt);
           });
-          
+
           if (count === 0) {
             trigger.innerHTML = `No ${key}s found <span style="opacity: 0.5; font-size: 0.7em; margin-left: 6px;">▼</span>`;
             trigger.style.opacity = "0.5";
@@ -3403,10 +4196,10 @@
           } else {
             trigger.innerHTML = `Select a ${key === "channel_id" ? "channel" : key}... <span style="opacity: 0.5; font-size: 0.7em; margin-left: 6px;">▼</span>`;
           }
-          
+
           trigger.addEventListener("click", (e) => {
             e.stopPropagation();
-            document.querySelectorAll(".select-menu").forEach(m => {
+            document.querySelectorAll(".select-menu").forEach((m) => {
               if (m !== menu) m.classList.remove("open");
             });
             menu.classList.toggle("open");
@@ -3414,7 +4207,7 @@
               searchInput.focus();
             }
           });
-          
+
           selectWrapper.appendChild(trigger);
           selectWrapper.appendChild(menu);
           wrapper.appendChild(selectWrapper);
@@ -3434,9 +4227,15 @@
           return;
         }
       }
-      
+
       // Standard field handling for other fields
-      const wrapper = createFieldWithTooltip(labelText, type, cls, tooltipText, key);
+      const wrapper = createFieldWithTooltip(
+        labelText,
+        type,
+        cls,
+        tooltipText,
+        key,
+      );
       const input = wrapper.querySelector("input");
 
       input.value = ping[key] ?? "";
@@ -3448,49 +4247,64 @@
     });
 
     const arrayFields = [
-      ["categories", "Categories", true, "Categories to poll from when searching for deals"],
-      ["exclude_keywords", "Exclude Keywords", false, "Keywords that will prevent pings from being sent"],
-      ["blocklist_override", "Blocklist Override", false, "Keywords to allow even if they are in the global blocklist"],
+      [
+        "categories",
+        "Categories",
+        true,
+        "Categories to poll from when searching for deals",
+      ],
+      [
+        "exclude_keywords",
+        "Exclude Keywords",
+        false,
+        "Keywords that will prevent pings from being sent",
+      ],
+      [
+        "blocklist_override",
+        "Blocklist Override",
+        false,
+        "Keywords to allow even if they are in the global blocklist",
+      ],
     ];
 
     arrayFields.forEach(([key, labelText, isNumeric, tooltipText]) => {
       const wrapper = document.createElement("div");
       wrapper.className = "field half";
-      
+
       const labelRow = document.createElement("div");
       labelRow.style.display = "flex";
       labelRow.style.alignItems = "center";
       labelRow.style.gap = "6px";
-      
+
       const label = document.createElement("label");
       label.textContent = labelText;
       labelRow.appendChild(label);
-      
+
       if (tooltipText) {
         const tooltipContainer = document.createElement("div");
         tooltipContainer.className = "tooltip-container";
-        
+
         const tooltipIcon = document.createElement("span");
         tooltipIcon.className = "tooltip-icon";
         tooltipIcon.textContent = "ⓘ";
         tooltipIcon.setAttribute("aria-label", "Help");
-        
+
         const tooltipTextEl = document.createElement("span");
         tooltipTextEl.className = "tooltip-text";
         tooltipTextEl.textContent = tooltipText;
-        
+
         tooltipContainer.appendChild(tooltipIcon);
         tooltipContainer.appendChild(tooltipTextEl);
         labelRow.appendChild(tooltipContainer);
       }
-      
+
       wrapper.appendChild(labelRow);
-      
+
       const trigger = document.createElement("div");
       trigger.className = "array-trigger";
       const updateTrigger = () => {
         trigger.innerHTML = "";
-        (ping[key] || []).forEach(val => {
+        (ping[key] || []).forEach((val) => {
           const chip = document.createElement("span");
           chip.className = "array-chip";
           chip.textContent = val;
@@ -3498,7 +4312,7 @@
         });
       };
       updateTrigger();
-      
+
       // Special handling for categories - use searchable selector
       if (key === "categories") {
         trigger.addEventListener("click", () => {
@@ -3518,23 +4332,24 @@
           });
         });
       }
-      
+
       wrapper.appendChild(trigger);
       pingFormEl.appendChild(wrapper);
     });
 
     const pingDnsWrap = document.createElement("div");
     pingDnsWrap.className = "field full";
-    
+
     const pingDnsLabelRow = document.createElement("div");
     pingDnsLabelRow.style.display = "flex";
     pingDnsLabelRow.style.alignItems = "center";
     pingDnsLabelRow.style.gap = "6px";
-    
+
     const pingDnsLabel = document.createElement("label");
-    pingDnsLabel.textContent = "Ping-level Do Not Show (Excludes all deals in the selected tiers in this ping only)";
+    pingDnsLabel.textContent =
+      "Ping-level Do Not Show (Excludes all deals in the selected tiers in this ping only)";
     pingDnsLabelRow.appendChild(pingDnsLabel);
-    
+
     const pingDnsTooltip = document.createElement("div");
     pingDnsTooltip.className = "tooltip-container";
     const pingDnsTooltipIcon = document.createElement("span");
@@ -3542,11 +4357,12 @@
     pingDnsTooltipIcon.textContent = "ⓘ";
     const pingDnsTooltipText = document.createElement("span");
     pingDnsTooltipText.className = "tooltip-text";
-    pingDnsTooltipText.textContent = "Select deal tiers (fire_deal, great_deal, etc.) that should not trigger pings for this specific ping only.";
+    pingDnsTooltipText.textContent =
+      "Select deal tiers (fire_deal, great_deal, etc.) that should not trigger pings for this specific ping only.";
     pingDnsTooltip.appendChild(pingDnsTooltipIcon);
     pingDnsTooltip.appendChild(pingDnsTooltipText);
     pingDnsLabelRow.appendChild(pingDnsTooltip);
-    
+
     pingDnsWrap.appendChild(pingDnsLabelRow);
 
     const pingDnsSelect = createMultiSelect(
@@ -3556,7 +4372,7 @@
         ping.do_not_show = newValues;
         markPingChanged();
       },
-      "Select tiers to exclude..."
+      "Select tiers to exclude...",
     );
     pingDnsWrap.appendChild(pingDnsSelect);
     pingFormEl.appendChild(pingDnsWrap);
@@ -3573,7 +4389,8 @@
     });
     const cbLabel = document.createElement("label");
     cbLabel.setAttribute("for", "is_psu_cb");
-    cbLabel.textContent = "Is this a PSU-specific ping? (Enables SPL's PSU Tierlist integration)";
+    cbLabel.textContent =
+      "Is this a PSU-specific ping? (Enables SPL's PSU Tierlist integration)";
     isPsuWrap.appendChild(cb);
     isPsuWrap.appendChild(cbLabel);
     pingFormEl.appendChild(isPsuWrap);
@@ -3629,6 +4446,69 @@
         renderKeywords(ping);
         markPingChanged();
       });
+      workflowControls.appendChild(operationModeSelect);
+
+      const bulkAdjustWrap = document.createElement("div");
+      bulkAdjustWrap.className = "keyword-bulk-adjust";
+
+      const bulkInput = document.createElement("input");
+      bulkInput.type = "number";
+      bulkInput.min = "0";
+      bulkInput.step = "1";
+      bulkInput.value = "5";
+      bulkInput.className = "keyword-shift-input";
+      bulkInput.title = "Dollar amount to shift this item's prices";
+
+      const bulkButtons = document.createElement("div");
+      bulkButtons.className = "keyword-bulk-buttons";
+
+      const shiftUpBtn = document.createElement("button");
+      shiftUpBtn.type = "button";
+      shiftUpBtn.className = "tonal keyword-shift-btn";
+      shiftUpBtn.textContent = "↑";
+      shiftUpBtn.title = "Shift all item prices and deal thresholds up";
+      shiftUpBtn.style.marginTop = "0px";
+      shiftUpBtn.addEventListener("click", () => {
+        const amount = clampNonNegativeInteger(bulkInput.value || 0);
+        if (amount <= 0) {
+          setStatus("Shift amount must be greater than 0.", "warning");
+          return;
+        }
+        shiftKeywordPrices(item, amount);
+        renderKeywords(ping);
+        markPingChanged();
+        setStatus(
+          `Shifted item ${keywordIndex + 1} prices up by $${amount}.`,
+          "ok",
+        );
+      });
+
+      const shiftDownBtn = document.createElement("button");
+      shiftDownBtn.type = "button";
+      shiftDownBtn.className = "tonal keyword-shift-btn";
+      shiftDownBtn.textContent = "↓";
+      shiftDownBtn.title = "Shift all item prices and deal thresholds down";
+      shiftDownBtn.style.marginTop = "auto";
+      shiftDownBtn.addEventListener("click", () => {
+        const amount = clampNonNegativeInteger(bulkInput.value || 0);
+        if (amount <= 0) {
+          setStatus("Shift amount must be greater than 0.", "warning");
+          return;
+        }
+        shiftKeywordPrices(item, -amount);
+        renderKeywords(ping);
+        markPingChanged();
+        setStatus(
+          `Shifted item ${keywordIndex + 1} prices down by $${amount}.`,
+          "ok",
+        );
+      });
+
+      bulkButtons.appendChild(shiftUpBtn);
+      bulkButtons.appendChild(shiftDownBtn);
+      bulkAdjustWrap.appendChild(bulkInput);
+      bulkAdjustWrap.appendChild(bulkButtons);
+      workflowControls.appendChild(bulkAdjustWrap);
 
       const duplicateKeywordButton = document.createElement("button");
       duplicateKeywordButton.className = "tonal";
@@ -3636,8 +4516,14 @@
       duplicateKeywordButton.addEventListener("click", () => {
         const copy = JSON.parse(JSON.stringify(item));
         ping.items.splice(keywordIndex + 1, 0, copy);
-        const copiedMeta = cloneJson(keywordMeta || createDefaultKeywordMeta(false));
-        state.editor_metadata.pings[selectedPingIndex].items.splice(keywordIndex + 1, 0, copiedMeta);
+        const copiedMeta = cloneJson(
+          keywordMeta || createDefaultKeywordMeta(false),
+        );
+        state.editor_metadata.pings[selectedPingIndex].items.splice(
+          keywordIndex + 1,
+          0,
+          copiedMeta,
+        );
         renderKeywords(ping);
         markPingChanged();
         setStatus(`Duplicated item ${keywordIndex + 1}.`, "ok");
@@ -3651,15 +4537,17 @@
           "Delete Item",
           `Delete item ${keywordIndex + 1}?`,
           "Delete",
-          "danger"
+          "danger",
         );
         if (!shouldDelete) return;
         ping.items.splice(keywordIndex, 1);
-        state.editor_metadata.pings[selectedPingIndex].items.splice(keywordIndex, 1);
+        state.editor_metadata.pings[selectedPingIndex].items.splice(
+          keywordIndex,
+          1,
+        );
         renderKeywords(ping);
         markPingChanged();
       });
-      workflowControls.appendChild(operationModeSelect);
       head.appendChild(title);
       head.appendChild(workflowControls);
       head.appendChild(duplicateKeywordButton);
@@ -3701,16 +4589,27 @@
         grid.appendChild(section);
       };
 
-      const isTyped = keywordMeta.mode === "typed" && !!keywordMeta.component_type;
+      const isTyped =
+        keywordMeta.mode === "typed" && !!keywordMeta.component_type;
       if (isTyped) {
         addKeywordSectionHeader("Component");
         const componentType = keywordMeta.component_type;
-        if (!keywordMeta.component_data || typeof keywordMeta.component_data !== "object") {
+        if (
+          !keywordMeta.component_data ||
+          typeof keywordMeta.component_data !== "object"
+        ) {
           keywordMeta.component_data = getDefaultComponentData(componentType);
         }
         const componentData = keywordMeta.component_data;
 
-        const addTypedField = (key, labelText, type = "text", cls = "half", options = null, placeholder = "") => {
+        const addTypedField = (
+          key,
+          labelText,
+          type = "text",
+          cls = "half",
+          options = null,
+          placeholder = "",
+        ) => {
           const wrapper = document.createElement("div");
           wrapper.className = `field ${cls}`;
           const label = document.createElement("label");
@@ -3740,7 +4639,10 @@
           input.addEventListener("change", () => {
             componentData[key] = input.value;
             if (!applyTypedMetaToKeyword(item, ping, keywordMeta, true)) {
-              setStatus("Missing required typed fields. Update the missing values to continue.", "warning");
+              setStatus(
+                "Missing required typed fields. Update the missing values to continue.",
+                "warning",
+              );
             } else {
               renderKeywords(ping);
               markPingChanged();
@@ -3752,7 +4654,10 @@
         };
 
         if (componentType === "nvidia_gpu") {
-          addTypedField("brand", "GPU Brand", "select", "third", ["RTX", "GTX"]);
+          addTypedField("brand", "GPU Brand", "select", "third", [
+            "RTX",
+            "GTX",
+          ]);
           addTypedField("model", "Model", "text", "third", null, "e.g., 5070");
           addTypedField("variant", "Variant", "select", "third", [
             { value: "normal", label: "Normal" },
@@ -3761,7 +4666,14 @@
             { value: "ti_super", label: "Ti SUPER" },
           ]);
           if (componentData.variant === "normal") {
-            addTypedField("vram", "VRAM (Optional)", "number", "third", null, "e.g., 12");
+            addTypedField(
+              "vram",
+              "VRAM (Optional)",
+              "number",
+              "third",
+              null,
+              "e.g., 12",
+            );
           }
         } else if (componentType === "amd_gpu") {
           addTypedField("model", "Model", "text", "half", null, "e.g., 9070");
@@ -3771,9 +4683,21 @@
             { value: "xtx", label: "XTX" },
           ]);
         } else if (componentType === "amd_cpu") {
-          addTypedField("ryzen", "Ryzen Series", "select", "third", ["3", "5", "7", "9"]);
+          addTypedField("ryzen", "Ryzen Series", "select", "third", [
+            "3",
+            "5",
+            "7",
+            "9",
+          ]);
           addTypedField("model", "Model", "text", "third", null, "e.g., 7800");
-          addTypedField("suffix", "Suffix (Optional)", "text", "third", null, "e.g., X3D");
+          addTypedField(
+            "suffix",
+            "Suffix (Optional)",
+            "text",
+            "third",
+            null,
+            "e.g., X3D",
+          );
         } else if (componentType === "ram") {
           addTypedField("capacity", "Capacity (GB)", "number", "third");
           addTypedField("ddr", "DDR Type", "text", "third", null, "DDR5");
@@ -3784,11 +4708,31 @@
             { value: "tb", label: "TB only" },
             { value: "gb_tb", label: "GB or TB" },
           ]);
-          if (componentData.capacity_mode === "gb" || componentData.capacity_mode === "gb_tb") {
-            addTypedField("gb", "GB Value / Regex", "text", "third", null, "e.g., 512");
+          if (
+            componentData.capacity_mode === "gb" ||
+            componentData.capacity_mode === "gb_tb"
+          ) {
+            addTypedField(
+              "gb",
+              "GB Value / Regex",
+              "text",
+              "third",
+              null,
+              "e.g., 512",
+            );
           }
-          if (componentData.capacity_mode === "tb" || componentData.capacity_mode === "gb_tb") {
-            addTypedField("tb", "TB Value / Regex", "text", "third", null, "e.g., 1");
+          if (
+            componentData.capacity_mode === "tb" ||
+            componentData.capacity_mode === "gb_tb"
+          ) {
+            addTypedField(
+              "tb",
+              "TB Value / Regex",
+              "text",
+              "third",
+              null,
+              "e.g., 1",
+            );
           }
         }
 
@@ -3796,39 +4740,41 @@
           "Matching",
           "Filter supports plaintext or regexp:: patterns. Query is only used in query mode.",
         );
-        const basicFields = itemKeyword.mode === "query"
-          ? [
-            ["friendly_name", "Friendly Name", "text", "half"],
-            ["keyword_query", "Query", "text", "half"],
-            ["keyword_filter", "Filter", "text", "full"],
-            ["min_price", "Min Price", "number", "third"],
-            ["max_price", "Max Price", "number", "third"],
-            ["target_price", "Target Price", "number", "third"],
-          ]
-          : [
-            ["friendly_name", "Friendly Name", "text", "half"],
-            ["keyword_filter", "Filter", "text", "half"],
-            ["min_price", "Min Price", "number", "third"],
-            ["max_price", "Max Price", "number", "third"],
-            ["target_price", "Target Price", "number", "third"],
-          ];
+        const basicFields =
+          itemKeyword.mode === "query"
+            ? [
+                ["friendly_name", "Friendly Name", "text", "half"],
+                ["keyword_query", "Query", "text", "half"],
+                ["keyword_filter", "Filter", "text", "full"],
+                ["min_price", "Min Price", "number", "third"],
+                ["max_price", "Max Price", "number", "third"],
+                ["target_price", "Target Price", "number", "third"],
+              ]
+            : [
+                ["friendly_name", "Friendly Name", "text", "half"],
+                ["keyword_filter", "Filter", "text", "half"],
+                ["min_price", "Min Price", "number", "third"],
+                ["max_price", "Max Price", "number", "third"],
+                ["target_price", "Target Price", "number", "third"],
+              ];
         let priceValidationMsg = null;
         basicFields.forEach(([key, labelText, type, cls]) => {
           const wrapper = document.createElement("div");
           wrapper.className = `field ${cls}`;
           const label = document.createElement("label");
           label.textContent = labelText;
-          const labelNode = key === "keyword_filter"
-            ? addLabelWithTooltip(
-              label,
-              "Use plaintext for simple contains match, or prefix with regexp:: for regex matching.",
-            )
-            : key === "keyword_query"
+          const labelNode =
+            key === "keyword_filter"
               ? addLabelWithTooltip(
-                label,
-                "eBay search query text. Only shown and used when item mode is Query.",
-              )
-              : label;
+                  label,
+                  "Use plaintext for simple contains match, or prefix with regexp:: for regex matching.",
+                )
+              : key === "keyword_query"
+                ? addLabelWithTooltip(
+                    label,
+                    "eBay search query text. Only shown and used when item mode is Query.",
+                  )
+                : label;
           const input = document.createElement("input");
           input.type = type;
           if (key === "keyword_filter") {
@@ -3841,7 +4787,10 @@
           }
           const validatePriceInputs = () => {
             const msg = getItemPriceValidationMessage(item);
-            const isPriceField = key === "min_price" || key === "max_price" || key === "target_price";
+            const isPriceField =
+              key === "min_price" ||
+              key === "max_price" ||
+              key === "target_price";
             if (isPriceField) {
               if (msg) input.classList.add("invalid");
               else input.classList.remove("invalid");
@@ -3852,6 +4801,13 @@
           input.addEventListener("change", () => {
             if (type === "number") {
               item[key] = input.value === "" ? null : Number(input.value);
+              const correctionMsg = autoCorrectKeywordPrices(item);
+              if (correctionMsg) {
+                setStatus(correctionMsg, "warning");
+                renderKeywords(ping);
+                markPingChanged();
+                return;
+              }
               validatePriceInputs();
             } else {
               if (key === "keyword_filter") {
@@ -3878,11 +4834,21 @@
             genBtn.className = "tonal";
             genBtn.textContent = "Generate";
             genBtn.addEventListener("click", () => {
-              const targetType = keywordMeta.component_type || inferComponentTypeFromKeyword(itemKeyword.filter || "");
+              const targetType =
+                keywordMeta.component_type ||
+                inferComponentTypeFromKeyword(itemKeyword.filter || "");
               openFilterGenerateModal(keywordIndex, {
                 conversion_mode: false,
-                force_component_type: targetType && targetType !== "custom" ? targetType : "nvidia_gpu",
-                prefill_component_data: reverseParseComponentData(item, targetType && targetType !== "custom" ? targetType : "nvidia_gpu"),
+                force_component_type:
+                  targetType && targetType !== "custom"
+                    ? targetType
+                    : "nvidia_gpu",
+                prefill_component_data: reverseParseComponentData(
+                  item,
+                  targetType && targetType !== "custom"
+                    ? targetType
+                    : "nvidia_gpu",
+                ),
               });
               setStatus("Filter generator opened.", "ok");
             });
@@ -3900,28 +4866,28 @@
           warn.textContent = priceValidationMsg;
           grid.appendChild(warn);
         }
-
       } else {
         addKeywordSectionHeader(
           "Matching",
           "Filter supports plaintext or regexp:: patterns. Query is only used in query mode.",
         );
-        const basicFields = itemKeyword.mode === "query"
-          ? [
-            ["friendly_name", "Friendly Name", "text", "half"],
-            ["keyword_query", "Query", "text", "half"],
-            ["keyword_filter", "Filter", "text", "full"],
-            ["min_price", "Min Price", "number", "third"],
-            ["max_price", "Max Price", "number", "third"],
-            ["target_price", "Target Price", "number", "third"],
-          ]
-          : [
-            ["friendly_name", "Friendly Name", "text", "half"],
-            ["keyword_filter", "Filter", "text", "half"],
-            ["min_price", "Min Price", "number", "third"],
-            ["max_price", "Max Price", "number", "third"],
-            ["target_price", "Target Price", "number", "third"],
-          ];
+        const basicFields =
+          itemKeyword.mode === "query"
+            ? [
+                ["friendly_name", "Friendly Name", "text", "half"],
+                ["keyword_query", "Query", "text", "half"],
+                ["keyword_filter", "Filter", "text", "full"],
+                ["min_price", "Min Price", "number", "third"],
+                ["max_price", "Max Price", "number", "third"],
+                ["target_price", "Target Price", "number", "third"],
+              ]
+            : [
+                ["friendly_name", "Friendly Name", "text", "half"],
+                ["keyword_filter", "Filter", "text", "half"],
+                ["min_price", "Min Price", "number", "third"],
+                ["max_price", "Max Price", "number", "third"],
+                ["target_price", "Target Price", "number", "third"],
+              ];
 
         let priceValidationMsg = null;
         basicFields.forEach(([key, labelText, type, cls]) => {
@@ -3930,17 +4896,18 @@
 
           const label = document.createElement("label");
           label.textContent = labelText;
-          const labelNode = key === "keyword_filter"
-            ? addLabelWithTooltip(
-              label,
-              "Use plaintext for simple contains match, or prefix with regexp:: for regex matching.",
-            )
-            : key === "keyword_query"
+          const labelNode =
+            key === "keyword_filter"
               ? addLabelWithTooltip(
-                label,
-                "eBay search query text. Only shown and used when item mode is Query.",
-              )
-              : label;
+                  label,
+                  "Use plaintext for simple contains match, or prefix with regexp:: for regex matching.",
+                )
+              : key === "keyword_query"
+                ? addLabelWithTooltip(
+                    label,
+                    "eBay search query text. Only shown and used when item mode is Query.",
+                  )
+                : label;
 
           const input = document.createElement("input");
           input.type = type;
@@ -3954,7 +4921,10 @@
           }
           const validatePriceInputs = () => {
             const msg = getItemPriceValidationMessage(item);
-            const isPriceField = key === "min_price" || key === "max_price" || key === "target_price";
+            const isPriceField =
+              key === "min_price" ||
+              key === "max_price" ||
+              key === "target_price";
             if (isPriceField) {
               if (msg) input.classList.add("invalid");
               else input.classList.remove("invalid");
@@ -3965,6 +4935,13 @@
           input.addEventListener("change", () => {
             if (type === "number") {
               item[key] = input.value === "" ? null : Number(input.value);
+              const correctionMsg = autoCorrectKeywordPrices(item);
+              if (correctionMsg) {
+                setStatus(correctionMsg, "warning");
+                renderKeywords(ping);
+                markPingChanged();
+                return;
+              }
               validatePriceInputs();
             } else {
               if (key === "keyword_filter") {
@@ -3992,11 +4969,21 @@
             genBtn.className = "tonal";
             genBtn.textContent = "Generate";
             genBtn.addEventListener("click", () => {
-              const targetType = keywordMeta.component_type || inferComponentTypeFromKeyword(itemKeyword.filter || "");
+              const targetType =
+                keywordMeta.component_type ||
+                inferComponentTypeFromKeyword(itemKeyword.filter || "");
               openFilterGenerateModal(keywordIndex, {
                 conversion_mode: false,
-                force_component_type: targetType && targetType !== "custom" ? targetType : "nvidia_gpu",
-                prefill_component_data: reverseParseComponentData(item, targetType && targetType !== "custom" ? targetType : "nvidia_gpu"),
+                force_component_type:
+                  targetType && targetType !== "custom"
+                    ? targetType
+                    : "nvidia_gpu",
+                prefill_component_data: reverseParseComponentData(
+                  item,
+                  targetType && targetType !== "custom"
+                    ? targetType
+                    : "nvidia_gpu",
+                ),
               });
               setStatus("Filter generator opened.", "ok");
             });
@@ -4023,7 +5010,8 @@
       const dnsWrapper = document.createElement("div");
       dnsWrapper.className = "field full";
       const dnsLabel = document.createElement("label");
-      dnsLabel.textContent = "Do not show (Item-level) (Excludes selected tiers from pings)";
+      dnsLabel.textContent =
+        "Do not show (Item-level) (Excludes selected tiers from pings)";
       dnsWrapper.appendChild(dnsLabel);
 
       const dnsSelect = createMultiSelect(
@@ -4033,7 +5021,7 @@
           item.deal_ranges.do_not_show = newValues;
           markPingChanged();
         },
-        "Select tiers to exclude..."
+        "Select tiers to exclude...",
       );
       dnsWrapper.appendChild(dnsSelect);
       grid.appendChild(dnsWrapper);
@@ -4051,11 +5039,17 @@
       dealAssistBtn.className = "tonal";
       dealAssistBtn.textContent = "Generate Deal Ranges";
       dealAssistBtn.addEventListener("click", () => {
-        const targetType = keywordMeta.component_type || inferComponentTypeFromKeyword(itemKeyword.filter || "");
+        const targetType =
+          keywordMeta.component_type ||
+          inferComponentTypeFromKeyword(itemKeyword.filter || "");
         openAutoGenerateModal(keywordIndex, {
           conversion_mode: false,
-          force_component_type: targetType && targetType !== "custom" ? targetType : "nvidia_gpu",
-          prefill_component_data: reverseParseComponentData(item, targetType && targetType !== "custom" ? targetType : "nvidia_gpu"),
+          force_component_type:
+            targetType && targetType !== "custom" ? targetType : "nvidia_gpu",
+          prefill_component_data: reverseParseComponentData(
+            item,
+            targetType && targetType !== "custom" ? targetType : "nvidia_gpu",
+          ),
         });
         setStatus("Deal-ranges assist opened.", "ok");
       });
@@ -4071,14 +5065,17 @@
     });
 
     if (ping.items.length === 0) {
-      keywordCardsEl.innerHTML = '<p class="muted">No items for this ping. Add one.</p>';
+      keywordCardsEl.innerHTML =
+        '<p class="muted">No items for this ping. Add one.</p>';
     }
   }
 
   function bindTabClicks() {
     document.querySelectorAll(".tab-btn").forEach((button) => {
       button.addEventListener("click", () => {
-        document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+        document
+          .querySelectorAll(".tab-btn")
+          .forEach((b) => b.classList.remove("active"));
         button.classList.add("active");
         const targetId = button.getAttribute("data-tab");
         document.querySelectorAll(".panel").forEach((panel) => {
@@ -4112,34 +5109,48 @@
     document.getElementById("btnSavePing").addEventListener("click", () => {
       if (!state || !state.pings || !state.pings.length) return;
       if (!hasPendingPingChanges) return;
-      
+
+      state.pings.forEach((ping) => {
+        (ping.items || []).forEach((item) => {
+          autoCorrectKeywordPrices(item);
+        });
+      });
+
       // Validate before saving
       const validationErrors = validateStateForSave();
       if (validationErrors.length > 0) {
-        showError(`Validation failed with ${validationErrors.length} error(s). Please fix the highlighted fields.`);
-        validationErrors.forEach(err => {
+        showError(
+          `Validation failed with ${validationErrors.length} error(s). Please fix the highlighted fields.`,
+        );
+        validationErrors.forEach((err) => {
           console.error(`[Validation] ${err.message}`);
         });
         return;
       }
-      
+
       touchSelectedPingTimestampIfNeeded();
       openSaveDiffDialog(buildSaveParsedPayload());
     });
-    document.getElementById("btnDiscard").addEventListener("click", () => discardChanges());
-    document.getElementById("btnExport").addEventListener("click", () => send({ action: ACTION_EXPORT_JSON }));
+    document
+      .getElementById("btnDiscard")
+      .addEventListener("click", () => discardChanges());
+    document
+      .getElementById("btnExport")
+      .addEventListener("click", () => send({ action: ACTION_EXPORT_JSON }));
 
-    document.getElementById("btnExportBlocklist").addEventListener("click", () => {
-      if (!state.blocklist || !state.blocklist.length) return;
-      const content = state.blocklist.join("\n");
-      const blob = new Blob([content], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "global_blocklist.txt";
-      a.click();
-      URL.revokeObjectURL(url);
-    });
+    document
+      .getElementById("btnExportBlocklist")
+      .addEventListener("click", () => {
+        if (!state.blocklist || !state.blocklist.length) return;
+        const content = state.blocklist.join("\n");
+        const blob = new Blob([content], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "global_blocklist.txt";
+        a.click();
+        URL.revokeObjectURL(url);
+      });
 
     btnAddBlocklist.addEventListener("click", () => {
       openBlocklistAddDialog();
@@ -4165,14 +5176,17 @@
         (newValue) => {
           blocklistAddModeEl.value = newValue;
           applyBlocklistDialogModeToggle();
-        }
+        },
       );
       blocklistAddModeCustomEl.innerHTML = "";
       blocklistAddModeCustomEl.appendChild(dropdown.container);
       blocklistAddModeDropdown = dropdown;
     }
     if (blocklistAddModeEl) {
-      blocklistAddModeEl.addEventListener("change", applyBlocklistDialogModeToggle);
+      blocklistAddModeEl.addEventListener(
+        "change",
+        applyBlocklistDialogModeToggle,
+      );
     }
     if (blocklistAddValueEl) {
       blocklistAddValueEl.addEventListener("keydown", (e) => {
@@ -4183,7 +5197,10 @@
       });
     }
     if (btnBlocklistAddCancelEl) {
-      btnBlocklistAddCancelEl.addEventListener("click", closeBlocklistAddDialog);
+      btnBlocklistAddCancelEl.addEventListener(
+        "click",
+        closeBlocklistAddDialog,
+      );
     }
     if (btnBlocklistAddApplyEl) {
       btnBlocklistAddApplyEl.addEventListener("click", addBlocklistFromDialog);
@@ -4222,26 +5239,33 @@
       send({ action: ACTION_GET_STATE });
     });
 
-    document.getElementById("btnDuplicatePing").addEventListener("click", () => {
-      if (!state.pings.length) return;
-      ensureEditorMetadataForAllPings();
-      const copy = JSON.parse(JSON.stringify(state.pings[selectedPingIndex]));
-      const metaCopy = cloneJson(state.editor_metadata.pings[selectedPingIndex] || { items: [] });
-      state.pings.splice(selectedPingIndex + 1, 0, copy);
-      state.editor_metadata.pings.splice(selectedPingIndex + 1, 0, metaCopy);
-      selectedPingIndex++;
-      renderPingList();
-      renderPingDetails();
-      markPingChanged();
-      setStatus("Ping duplicated.", "ok");
-    });
+    document
+      .getElementById("btnDuplicatePing")
+      .addEventListener("click", () => {
+        if (!state.pings.length) return;
+        ensureEditorMetadataForAllPings();
+        const copy = JSON.parse(JSON.stringify(state.pings[selectedPingIndex]));
+        const metaCopy = cloneJson(
+          state.editor_metadata.pings[selectedPingIndex] || { items: [] },
+        );
+        state.pings.splice(selectedPingIndex + 1, 0, copy);
+        state.editor_metadata.pings.splice(selectedPingIndex + 1, 0, metaCopy);
+        selectedPingIndex++;
+        renderPingList();
+        renderPingDetails();
+        markPingChanged();
+        setStatus("Ping duplicated.", "ok");
+      });
 
     document.getElementById("btnMovePingUp").addEventListener("click", () => {
       if (selectedPingIndex <= 0) return;
       ensureEditorMetadataForAllPings();
       const item = state.pings.splice(selectedPingIndex, 1)[0];
       state.pings.splice(selectedPingIndex - 1, 0, item);
-      const metaItem = state.editor_metadata.pings.splice(selectedPingIndex, 1)[0];
+      const metaItem = state.editor_metadata.pings.splice(
+        selectedPingIndex,
+        1,
+      )[0];
       state.editor_metadata.pings.splice(selectedPingIndex - 1, 0, metaItem);
       selectedPingIndex--;
       renderPingList();
@@ -4254,7 +5278,10 @@
       ensureEditorMetadataForAllPings();
       const item = state.pings.splice(selectedPingIndex, 1)[0];
       state.pings.splice(selectedPingIndex + 1, 0, item);
-      const metaItem = state.editor_metadata.pings.splice(selectedPingIndex, 1)[0];
+      const metaItem = state.editor_metadata.pings.splice(
+        selectedPingIndex,
+        1,
+      )[0];
       state.editor_metadata.pings.splice(selectedPingIndex + 1, 0, metaItem);
       selectedPingIndex++;
       renderPingList();
@@ -4272,44 +5299,52 @@
       markPingChanged();
     });
 
-    document.getElementById("btnRemovePing").addEventListener("click", async () => {
-      if (!state.pings.length) return;
-      const currentPing = state.pings[selectedPingIndex];
-      const pingLabel = currentPing?.category_name || `Ping ${selectedPingIndex + 1}`;
-      const shouldDelete = await confirmAction(
-        "Delete Ping",
-        `Delete ${pingLabel}? This cannot be undone except by restoring a backup.`,
-        "Delete",
-        "danger"
-      );
-      if (!shouldDelete) return;
-      ensureEditorMetadataForAllPings();
-      state.pings.splice(selectedPingIndex, 1);
-      state.editor_metadata.pings.splice(selectedPingIndex, 1);
-      selectedPingIndex = Math.max(0, selectedPingIndex - 1);
-      
-      // Auto-save the state after removal since it's a high-intent action
-      touchSelectedPingTimestampIfNeeded();
-      send(buildSaveParsedPayload());
-      
-      renderPingList();
-      renderPingDetails();
-      markPingSaved();
-    });
+    document
+      .getElementById("btnRemovePing")
+      .addEventListener("click", async () => {
+        if (!state.pings.length) return;
+        const currentPing = state.pings[selectedPingIndex];
+        const pingLabel =
+          currentPing?.category_name || `Ping ${selectedPingIndex + 1}`;
+        const shouldDelete = await confirmAction(
+          "Delete Ping",
+          `Delete ${pingLabel}? This cannot be undone except by restoring a backup.`,
+          "Delete",
+          "danger",
+        );
+        if (!shouldDelete) return;
+        ensureEditorMetadataForAllPings();
+        state.pings.splice(selectedPingIndex, 1);
+        state.editor_metadata.pings.splice(selectedPingIndex, 1);
+        selectedPingIndex = Math.max(0, selectedPingIndex - 1);
+
+        // Auto-save the state after removal since it's a high-intent action
+        touchSelectedPingTimestampIfNeeded();
+        send(buildSaveParsedPayload());
+
+        renderPingList();
+        renderPingDetails();
+        markPingSaved();
+      });
 
     document.getElementById("btnAddKeyword").addEventListener("click", () => {
       if (!state.pings.length) return;
       ensureEditorMetadataForAllPings();
       const ping = state.pings[selectedPingIndex];
       ping.items.push(createDefaultItem());
-      state.editor_metadata.pings[selectedPingIndex].items.push(createDefaultKeywordMeta(true));
+      state.editor_metadata.pings[selectedPingIndex].items.push(
+        createDefaultKeywordMeta(true),
+      );
       renderKeywords(ping);
       markPingChanged();
     });
 
     btnAutoGenerateCancelEl.addEventListener("click", closeAutoGenerateModal);
-    btnFilterGenerateCancelEl.addEventListener("click", closeFilterGenerateModal);
-    
+    btnFilterGenerateCancelEl.addEventListener(
+      "click",
+      closeFilterGenerateModal,
+    );
+
     if (autoComponentTypeEl) {
       autoComponentTypeEl.addEventListener("change", () => {
         renderAutoComponentFields();
@@ -4341,17 +5376,68 @@
 
     btnSaveDiffCancelEl.addEventListener("click", () => {
       closeSaveDiffDialog();
+      pendingSavePayload = null;
       setStatus("Save cancelled.", "warning");
     });
     btnSaveDiffConfirmEl.addEventListener("click", () => {
       if (!pendingSavePayload) return;
-      send(pendingSavePayload);
       closeSaveDiffDialog();
-      setStatus("Saving ping changes...", "ok");
+      openVersionDialogFromPendingPayload();
+      setStatus("Add version info, then save.", "ok");
     });
     saveDiffOverlayEl.addEventListener("click", (e) => {
       if (e.target === saveDiffOverlayEl) {
         closeSaveDiffDialog();
+        pendingSavePayload = null;
+      }
+    });
+    versionLevelEl.addEventListener("change", () => {
+      if (!pendingSavePayload) return;
+      const currentVersion = getCurrentConfigVersion();
+      const level = versionLevelEl?.value || "patch";
+      const note = versionNoteEl?.value || "";
+      pendingVersionedPayload = buildVersionedPayload(
+        pendingSavePayload,
+        currentVersion,
+        level,
+        note,
+      );
+      if (versionPreviewEl && pendingVersionedPayload?.parsed?.config_version) {
+        versionPreviewEl.textContent = `${currentVersion} -> ${pendingVersionedPayload.parsed.config_version}`;
+      }
+    });
+    btnSaveVersionBackEl.addEventListener("click", () => {
+      closeVersionDialog();
+      if (pendingSavePayload) {
+        openSaveDiffDialog(pendingSavePayload);
+      }
+    });
+    btnSaveVersionConfirmEl.addEventListener("click", () => {
+      if (!pendingSavePayload) return;
+
+      const note = String(versionNoteEl?.value || "").trim();
+      if (!note) {
+        setStatus("Please add a changelog note before saving.", "warning");
+        return;
+      }
+
+      const currentVersion = getCurrentConfigVersion();
+      const level = versionLevelEl?.value || "patch";
+      const finalPayload = buildVersionedPayload(
+        pendingSavePayload,
+        currentVersion,
+        level,
+        note,
+      );
+
+      send(finalPayload);
+      closeVersionDialog(false);
+      setStatus("Saving changes with version update...", "ok");
+    });
+    saveVersionOverlayEl.addEventListener("click", (e) => {
+      if (e.target === saveVersionOverlayEl) {
+        closeVersionDialog(false);
+        setStatus("Save cancelled.", "warning");
       }
     });
 
@@ -4375,47 +5461,56 @@
     });
     btnArrayCloseEl.addEventListener("click", closeArrayEditor);
 
-    document.getElementById("btnRestoreBackup").addEventListener("click", async () => {
-      const filename = backupListEl.value;
-      if (!filename) {
-        setStatus("Select a backup first", "error");
-        return;
-      }
+    document
+      .getElementById("btnRestoreBackup")
+      .addEventListener("click", async () => {
+        const filename = backupListEl.value;
+        if (!filename) {
+          setStatus("Select a backup first", "error");
+          return;
+        }
 
-      const shouldRestore = await confirmAction(
-        "Restore Backup",
-        `Restore backup ${filename}? Current values will be replaced.`,
-        "Restore"
-      );
-      if (!shouldRestore) return;
-      send({ action: ACTION_RESTORE_BACKUP, filename });
-    });
+        const shouldRestore = await confirmAction(
+          "Restore Backup",
+          `Restore backup ${filename}? Current values will be replaced.`,
+          "Restore",
+        );
+        if (!shouldRestore) return;
+        send({ action: ACTION_RESTORE_BACKUP, filename });
+      });
 
-    document.getElementById("btnDeleteBackup").addEventListener("click", async () => {
-      const filename = backupListEl.value;
-      if (!filename) {
-        setStatus("Select a backup first", "error");
-        return;
-      }
+    document
+      .getElementById("btnDeleteBackup")
+      .addEventListener("click", async () => {
+        const filename = backupListEl.value;
+        if (!filename) {
+          setStatus("Select a backup first", "error");
+          return;
+        }
 
-      const shouldDelete = await confirmAction(
-        "Delete Backup",
-        `Delete backup ${filename}? This cannot be undone.`,
-        "Delete",
-        "danger"
-      );
-      if (!shouldDelete) return;
-      send({ action: "delete_backup", filename });
-    });
+        const shouldDelete = await confirmAction(
+          "Delete Backup",
+          `Delete backup ${filename}? This cannot be undone.`,
+          "Delete",
+          "danger",
+        );
+        if (!shouldDelete) return;
+        send({ action: "delete_backup", filename });
+      });
 
-    document.getElementById("btnCreateManualBackup").addEventListener("click", async () => {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-      const reason = `manual-${timestamp}`;
-      
-      setModalLoading(true);
-      send({ action: "create_manual_backup", reason });
-      setStatus("Creating manual backup...", "ok");
-    });
+    document
+      .getElementById("btnCreateManualBackup")
+      .addEventListener("click", async () => {
+        const timestamp = new Date()
+          .toISOString()
+          .replace(/[:.]/g, "-")
+          .slice(0, 19);
+        const reason = `manual-${timestamp}`;
+
+        setModalLoading(true);
+        send({ action: "create_manual_backup", reason });
+        setStatus("Creating manual backup...", "ok");
+      });
 
     backupListEl.addEventListener("change", () => {
       const filename = backupListEl.value;
@@ -4425,14 +5520,18 @@
       }
     });
 
-    document.getElementById("btnSwitchCancel").addEventListener("click", closeSwitchModal);
-    document.getElementById("btnSwitchDiscard").addEventListener("click", () => {
-      send({ action: "get_state" }); // Reload to discard
-      const target = switchTargetIndex;
-      closeSwitchModal();
-      // Store the target index to switch after state loads
-      window.pendingPingSwitch = target;
-    });
+    document
+      .getElementById("btnSwitchCancel")
+      .addEventListener("click", closeSwitchModal);
+    document
+      .getElementById("btnSwitchDiscard")
+      .addEventListener("click", () => {
+        send({ action: "get_state" }); // Reload to discard
+        const target = switchTargetIndex;
+        closeSwitchModal();
+        // Store the target index to switch after state loads
+        window.pendingPingSwitch = target;
+      });
     document.getElementById("btnSwitchSave").addEventListener("click", () => {
       touchSelectedPingTimestampIfNeeded();
       send(buildSaveParsedPayload());
@@ -4452,7 +5551,8 @@
     confirmCancelBtnEl.addEventListener("click", () => resolveConfirm(false));
 
     window.addEventListener("beforeunload", (e) => {
-      const hasChanges = JSON.stringify(state) !== JSON.stringify(originalState);
+      const hasChanges =
+        JSON.stringify(state) !== JSON.stringify(originalState);
       if (hasChanges) {
         e.preventDefault();
         e.returnValue = "";
@@ -4469,12 +5569,14 @@
 
     backupListEl.addEventListener("change", updateBackupMeta);
 
-    document.getElementById("btnToggleBlocklistDiff").addEventListener("click", () => {
-      const diffView = document.getElementById("blocklistDiffView");
-      if (diffView) {
-        diffView.classList.toggle("active");
-      }
-    });
+    document
+      .getElementById("btnToggleBlocklistDiff")
+      .addEventListener("click", () => {
+        const diffView = document.getElementById("blocklistDiffView");
+        if (diffView) {
+          diffView.classList.toggle("active");
+        }
+      });
   }
 
   function init() {
@@ -4482,7 +5584,7 @@
     bindActions();
     updatePingSaveButtonState();
     connect();
-    
+
     // Initialize session management
     updateSessionExpiry();
   }
