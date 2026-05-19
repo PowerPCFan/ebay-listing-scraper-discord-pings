@@ -121,16 +121,20 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0
     ping_to_query_items: dict[int, list[ItemConfig]] = {}
 
     for index, ping_config in enumerate(gv.config.pings):
+        if not ping_config.enabled:
+            logger.debug(f"Skipping disabled ping config: {ping_config.category_name}")
+            continue
+
         ping_to_categories[index] = ping_config.categories
         poll_items = [
             item_config
             for item_config in ping_config.items
-            if item_config.keyword.mode == KeywordMode.POLL
+            if item_config.keyword.mode == KeywordMode.POLL and item_config.enabled
         ]
         query_items = [
             item_config
             for item_config in ping_config.items
-            if item_config.keyword.mode == KeywordMode.QUERY
+            if item_config.keyword.mode == KeywordMode.QUERY and item_config.enabled
         ]
         ping_to_poll_items[index] = poll_items
         ping_to_query_items[index] = query_items
@@ -159,6 +163,9 @@ async def match_single_cycle(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0
     logger.info(f"Fetched {sum(len(items) for items in results)} items from all categories")
 
     for i, ping_config in enumerate(gv.config.pings):
+        if not ping_config.enabled:
+            continue
+
         combined_items = {}
         logger.debug(
             f"Processing ping config #{i} ({ping_config.category_name}), "

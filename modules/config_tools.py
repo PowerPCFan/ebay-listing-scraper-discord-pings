@@ -124,6 +124,7 @@ class KeywordDefinition:
 @dataclass
 class ItemConfig:
     keyword: KeywordDefinition
+    enabled: bool = True
     min_price: int | None = None
     max_price: int | None = None
     target_price: int | None = None
@@ -133,6 +134,7 @@ class ItemConfig:
     def to_dict(self) -> dict:
         return {
             "keyword": self.keyword.to_dict(),
+            "enabled": self.enabled,
             "min_price": self.min_price,
             "max_price": self.max_price,
             "target_price": self.target_price,
@@ -147,6 +149,7 @@ class ItemConfig:
 
         return cls(
             keyword=KeywordDefinition.from_dict(keyword_data),
+            enabled=data.get("enabled", True),
             min_price=data.get("min_price"),
             max_price=data.get("max_price"),
             target_price=data.get("target_price"),
@@ -193,6 +196,7 @@ class PingConfig:
     items: Items
     channel_id: int
     role: int
+    enabled: bool = True
     price_ranges_last_updated: str = "1970-01-01T00:00:00.000+00:00"
     exclude_keywords: list[str] = field(default_factory=list)
     blocklist_override: list[str] = field(default_factory=list)
@@ -206,6 +210,7 @@ class PingConfig:
             "items": [item.to_dict() for item in self.items],
             "channel_id": Config.to_str(self.channel_id),
             "role": Config.to_str(self.role),
+            "enabled": self.enabled,
             "price_ranges_last_updated": self.price_ranges_last_updated,
             "exclude_keywords": self.exclude_keywords,
             "blocklist_override": self.blocklist_override,
@@ -226,6 +231,7 @@ class PingConfig:
             items=[ItemConfig.from_dict(d) for d in items_data],
             channel_id=Config.to_int(str(data["channel_id"])),
             role=Config.to_int(str(data["role"])),
+            enabled=data.get("enabled", True),
             price_ranges_last_updated=data.get(
                 "price_ranges_last_updated",
                 "1970-01-01T00:00:00.000+00:00",

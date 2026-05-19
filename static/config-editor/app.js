@@ -1768,7 +1768,7 @@
     const ping = state.pings[selectedPingIndex];
     const item = ping.items[keywordIndex];
     const keywordMeta = getKeywordMeta(selectedPingIndex, keywordIndex);
-    const itemKeyword = ensureItemKeywordConfig(item);
+    const itemKeyword = ensureItem
     filterComponentTypeEl.value =
       options.force_component_type ||
       inferComponentTypeFromKeyword(itemKeyword.filter || "") ||
@@ -3262,11 +3262,13 @@
     if (!Array.isArray(ping.exclude_keywords)) ping.exclude_keywords = [];
     if (!Array.isArray(ping.blocklist_override)) ping.blocklist_override = [];
     if (!Array.isArray(ping.do_not_show)) ping.do_not_show = [];
+    if (ping.enabled === undefined) ping.enabled = true;
   }
 
   function createDefaultPing() {
     return {
       category_name: "New Ping",
+      enabled: true,
       categories: [],
       items: [],
       channel_id: 0,
@@ -4026,6 +4028,13 @@
         "The display name for this ping category",
       ],
       [
+        "enabled",
+        "Enabled",
+        "checkbox",
+        "half",
+        "Whether this ping category is currently active",
+      ],
+      [
         "channel_id",
         "Channel",
         "text",
@@ -4238,11 +4247,20 @@
       );
       const input = wrapper.querySelector("input");
 
-      input.value = ping[key] ?? "";
-      input.addEventListener("change", () => {
-        ping[key] = input.value;
-        markPingChanged();
-      });
+      if (type === "checkbox") {
+        wrapper.classList.add("checkbox-field");
+        input.checked = !!ping[key];
+        input.addEventListener("change", () => {
+          ping[key] = input.checked;
+          markPingChanged();
+        });
+      } else {
+        input.value = ping[key] ?? "";
+        input.addEventListener("change", () => {
+          ping[key] = input.value;
+          markPingChanged();
+        });
+      }
       pingFormEl.appendChild(wrapper);
     });
 
@@ -4743,6 +4761,7 @@
         const basicFields =
           itemKeyword.mode === "query"
             ? [
+                ["enabled", "Enabled", "checkbox", "half"],
                 ["friendly_name", "Friendly Name", "text", "half"],
                 ["keyword_query", "Query", "text", "half"],
                 ["keyword_filter", "Filter", "text", "full"],
@@ -4751,6 +4770,7 @@
                 ["target_price", "Target Price", "number", "third"],
               ]
             : [
+                ["enabled", "Enabled", "checkbox", "half"],
                 ["friendly_name", "Friendly Name", "text", "half"],
                 ["keyword_filter", "Filter", "text", "half"],
                 ["min_price", "Min Price", "number", "third"],
@@ -4777,7 +4797,10 @@
                 : label;
           const input = document.createElement("input");
           input.type = type;
-          if (key === "keyword_filter") {
+          if (type === "checkbox") {
+            wrapper.classList.add("checkbox-field");
+            input.checked = !!item[key];
+          } else if (key === "keyword_filter") {
             input.value = itemKeyword.filter ?? "";
           } else if (key === "keyword_query") {
             input.value = itemKeyword.query ?? "";
@@ -4799,7 +4822,9 @@
           };
           validatePriceInputs();
           input.addEventListener("change", () => {
-            if (type === "number") {
+            if (type === "checkbox") {
+              item[key] = input.checked;
+            } else if (type === "number") {
               item[key] = input.value === "" ? null : Number(input.value);
               const correctionMsg = autoCorrectKeywordPrices(item);
               if (correctionMsg) {
@@ -4874,6 +4899,7 @@
         const basicFields =
           itemKeyword.mode === "query"
             ? [
+                ["enabled", "Enabled", "checkbox", "half"],
                 ["friendly_name", "Friendly Name", "text", "half"],
                 ["keyword_query", "Query", "text", "half"],
                 ["keyword_filter", "Filter", "text", "full"],
@@ -4882,6 +4908,7 @@
                 ["target_price", "Target Price", "number", "third"],
               ]
             : [
+                ["enabled", "Enabled", "checkbox", "half"],
                 ["friendly_name", "Friendly Name", "text", "half"],
                 ["keyword_filter", "Filter", "text", "half"],
                 ["min_price", "Min Price", "number", "third"],
@@ -4911,7 +4938,10 @@
 
           const input = document.createElement("input");
           input.type = type;
-          if (key === "keyword_filter") {
+          if (type === "checkbox") {
+            wrapper.classList.add("checkbox-field");
+            input.checked = !!item[key];
+          } else if (key === "keyword_filter") {
             input.value = itemKeyword.filter ?? "";
           } else if (key === "keyword_query") {
             input.value = itemKeyword.query ?? "";
@@ -4933,7 +4963,9 @@
           };
           validatePriceInputs();
           input.addEventListener("change", () => {
-            if (type === "number") {
+            if (type === "checkbox") {
+              item[key] = input.checked;
+            } else if (type === "number") {
               item[key] = input.value === "" ? null : Number(input.value);
               const correctionMsg = autoCorrectKeywordPrices(item);
               if (correctionMsg) {
