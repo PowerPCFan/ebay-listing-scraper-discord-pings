@@ -305,7 +305,7 @@ class EbayScraperBot(commands.Bot):
             await self.start_scraper()
         else:
             logger.info(
-                "Scraper ready but waiting for start command. Run /start on Discord to begin scraping."
+                "Scraper ready but waiting for start command. Run /start on Discord or :start in terminal to begin scraping."
             )
             await change_status(
                 bot=self, logger=logger, message="Idling (use /start to begin scraping)"

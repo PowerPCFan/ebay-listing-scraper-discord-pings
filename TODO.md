@@ -3,3 +3,6 @@
 - config editor:
   - deal slider handles slightly misaligned - one fix i did improved it slightly but still not ideal
   - color scheme for deals is a bit weird
+  - no changelog for settings tab changes? whole settings tab is kinda fucked too the save dock is weirdly styled and it doesnt hide and show and the other tabs are weird too just work on the whole non-pings aspect of conf. editor
+  - separate app.js into multiple files -- or try SvelteKit in SSG mode? for cleaner DOM interaction and typescript and stuff
+- per-item exclude keywords/blocklist override?

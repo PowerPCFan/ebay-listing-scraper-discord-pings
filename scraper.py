@@ -4,11 +4,10 @@ import asyncio
 import contextlib
 import sys
 
-from modules import ebay_api
+from modules import config_editor, ebay_api
 from modules import global_vars as gv
 from modules.bot import bot as discord_bot
 from modules.command_listener import CommandListener
-from modules.config_web_server import start_config_web_server
 from modules.logger import logger
 
 
@@ -38,7 +37,7 @@ async def run_main() -> None:
 
     tasks.append(asyncio.create_task(start_command_listener()))
     tasks.append(asyncio.create_task(start_discord_bot()))
-    tasks.append(asyncio.create_task(start_config_web_server()))
+    tasks.append(asyncio.create_task(config_editor.start()))
 
     await asyncio.gather(*tasks, return_exceptions=True)
 

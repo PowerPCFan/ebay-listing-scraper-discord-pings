@@ -2726,7 +2726,7 @@
       const version = String(entry?.version || "unknown");
       const level = String(entry?.level || "patch");
       const note = String(entry?.note || "");
-      const timestamp = entry?.timestamp ? String(entry.timestamp) : "unknown time";
+      const timestamp = entry?.timestamp ? String(entry.timestamp) : null;
       const latest = !!entry?.latest;
 
       const heading = document.createElement("div");
@@ -2743,7 +2743,7 @@
       const meta = document.createElement("p");
       meta.className = "hint";
       meta.style.marginTop = "6px";
-      meta.textContent = `${timestamp} • Entry #${index + 1}`;
+      meta.textContent = timestamp ? new Date(timestamp).toLocaleString() : "Unknown time";
 
       item.appendChild(heading);
       item.appendChild(noteEl);
@@ -5431,7 +5431,7 @@
       pendingVersionedPayload = buildVersionedPayload(
         pendingSavePayload,
         currentVersion,
-        level,
+        level.toLowerCase(),
         note,
       );
       if (versionPreviewEl && pendingVersionedPayload?.parsed?.config_version) {
@@ -5458,7 +5458,7 @@
       const finalPayload = buildVersionedPayload(
         pendingSavePayload,
         currentVersion,
-        level,
+        level.toLowerCase(),
         note,
       );
 
