@@ -3,8 +3,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from modules.logger import logger
-
 ROLE_PICKER_STATE_FILE = Path(__file__).parent.parent / "picker_states.json"
 ROLE_PICKER_STATE_FILE.touch(exist_ok=True)
 
@@ -68,8 +66,6 @@ class RolePickerStates:
 
         with ROLE_PICKER_STATE_FILE.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
-
-        logger.info(f"Saved role picker states to {ROLE_PICKER_STATE_FILE}.")
 
 
 def reload_role_picker_states() -> RolePickerStates:
