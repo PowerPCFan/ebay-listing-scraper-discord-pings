@@ -97,6 +97,8 @@ def apply_candidate_raw(candidate_raw: str, reason: str = "save") -> dict[str, A
         gv.config = reload_config()
         raise
 
+    logger.info(f"Saved config to {config_path} and reloaded runtime config.")
+
     return get_parsed_config()
 
 

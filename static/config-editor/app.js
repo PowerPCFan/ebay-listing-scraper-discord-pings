@@ -3090,6 +3090,21 @@
           message.session_state.expires_at,
           message.session_state.warning_seconds,
         );
+
+        if (
+          typeof message.session_state.remaining_seconds === "number" &&
+          typeof message.session_state.warning_seconds === "number" &&
+          message.session_state.remaining_seconds > 0 &&
+          message.session_state.remaining_seconds <=
+            message.session_state.warning_seconds &&
+          !sessionExpiryOverlayEl.classList.contains("open")
+        ) {
+          showSessionWarning(
+            SESSION_MESSAGES.expiryWarning(
+              Math.max(1, Math.ceil(message.session_state.remaining_seconds)),
+            ),
+          );
+        }
       }
       renderSettings();
       renderBlocklist();

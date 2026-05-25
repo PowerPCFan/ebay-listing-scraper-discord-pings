@@ -8,6 +8,7 @@ from typing import NamedTuple, Self
 import isodate
 
 from modules import global_vars as gv
+from modules.logger import logger
 
 SESSION_STATE_PATH = Path(__file__).parent.parent.parent / "config-editor-session-state.json"
 DEFAULT_SESSION_VERSION = 1
@@ -93,6 +94,7 @@ def _write_state(state: SessionState) -> None:
         json.dumps(state.to_dict(), indent=4) + "\n",
         encoding="utf-8",
     )
+    logger.info(f"Saved config editor session state to {SESSION_STATE_PATH}.")
 
 
 def _read_session_version() -> int:

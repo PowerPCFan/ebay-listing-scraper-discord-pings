@@ -140,5 +140,6 @@ def save(metadata: dict[str, Any], parsed: dict[str, Any]) -> dict[str, Any]:
         json.dumps(reconciled, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+    logger.info(f"Saved config editor metadata to {EDITOR_METADATA_PATH}.")
 
     return reconciled

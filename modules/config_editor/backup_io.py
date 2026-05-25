@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from modules.config_tools import get_config_path, get_raw_config
+from modules.logger import logger
 
 BACKUP_DIR = Path(__file__).parent.parent.parent / "config-backups"
 
@@ -26,6 +27,7 @@ def write_snapshot(previous_raw: str, reason: str, version: str | None = None) -
     backup_path = BACKUP_DIR / backup_name
 
     backup_path.write_text(previous_raw, encoding="utf-8")
+    logger.info(f"Wrote config backup to {backup_path}.")
     return backup_path
 
 def write_global_blocklist_backup(previous_items: list[str]) -> Path:
@@ -34,6 +36,7 @@ def write_global_blocklist_backup(previous_items: list[str]) -> Path:
     backup_path = BACKUP_DIR / f"global_blocklist_{timestamp}_save.txt"
     backup_path.write_text("\n".join(previous_items) + "\n", encoding="utf-8")
 
+    logger.info(f"Wrote global blocklist backup to {backup_path}.")
     return backup_path
 
 def create_manual_backup(reason: str = "manual") -> Path:
