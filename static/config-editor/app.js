@@ -2601,11 +2601,36 @@
         type: "checkbox",
       },
       { key: "file_logging", label: "Enable File Logging", type: "checkbox" },
+      {
+        key: "config_editor_session_length",
+        label: "Config Editor Session Length",
+        type: "text",
+      },
+      {
+        key: "config_editor_show_extend_popup",
+        label: "Config Editor Warning Threshold",
+        type: "text",
+      },
       { key: "config_editor_host", label: "Config Editor Host", type: "text" },
       {
         key: "config_editor_port",
         label: "Config Editor Port",
         type: "number",
+      },
+      {
+        key: "config_editor_discord_client_id",
+        label: "Config Editor Discord Client ID",
+        type: "text",
+      },
+      {
+        key: "config_editor_discord_client_secret",
+        label: "Config Editor Discord Client Secret",
+        type: "text",
+      },
+      {
+        key: "config_editor_discord_redirect_uri",
+        label: "Config Editor Discord Redirect URI",
+        type: "text",
       },
     ];
 
