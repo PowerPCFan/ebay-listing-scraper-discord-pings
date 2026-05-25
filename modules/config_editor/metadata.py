@@ -6,7 +6,7 @@ from modules import global_vars as gv
 from modules.bot import bot as discord_bot
 from modules.logger import logger
 
-EDITOR_METADATA_PATH = Path(__file__).parent.parent / "config-editor-metadata.json"
+EDITOR_METADATA_PATH = Path(__file__).parent.parent.parent / "config-editor-metadata.json"
 
 
 class ChannelOrRoleMetadata(TypedDict):

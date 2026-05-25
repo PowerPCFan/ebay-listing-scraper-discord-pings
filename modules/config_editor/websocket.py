@@ -1,4 +1,5 @@
 import json
+import time
 from typing import Any
 
 from aiohttp import WSMsgType, web
@@ -16,7 +17,7 @@ from modules.config_tools import (
 from modules.logger import logger
 
 from . import authentication as auth
-from . import backup, backup_io, metadata
+from . import backup, backup_io, metadata, session_control, session_signals
 
 
 def _ws_state_payload() -> dict[str, Any]:
@@ -31,6 +32,7 @@ def _ws_state_payload() -> dict[str, Any]:
     blocklist_items = list(gv.global_blocklist.items)
 
     normalized_parsed = Config.from_dict(parsed).to_dict()
+    expires_at = session_control.get_session_expires_at()
 
     return {
         "type": "state",
@@ -41,6 +43,11 @@ def _ws_state_payload() -> dict[str, Any]:
         "global_blocklist": blocklist_items,
         "backups": backup.list_backups(),
         "discord_metadata": metadata.get_discord_meta(),
+        "session_state": {
+            "expires_at": int(expires_at * 1000),
+            "warning_seconds": session_control.get_config_editor_warning_seconds(),
+            "remaining_seconds": max(0, round(expires_at - time.time())),
+        },
     }
 
 
@@ -69,13 +76,24 @@ async def handler(request: web.Request) -> web.WebSocketResponse:  # noqa: C901,
 
     ws = web.WebSocketResponse(max_msg_size=8 * 1024 * 1024)
     await ws.prepare(request)
+    session_signals.register(ws)
 
     if not await _safe_ws_send_json(ws, _ws_state_payload()):
+        session_signals.unregister(ws)
         return ws
 
     async for msg in ws:
         if msg.type == WSMsgType.TEXT:
             try:
+                if session_signals.is_invalidated(ws) or not session_control.is_session_active():
+                    await _safe_ws_send_json(ws, {
+                        "type": "session_logout",
+                        "reason": "reset",
+                        "message": "All sessions were reset. Please log in again.",
+                    })
+                    session_signals.invalidate(ws)
+                    continue
+
                 payload = json.loads(msg.data)
                 action = payload.get("action")
 
@@ -253,4 +271,5 @@ async def handler(request: web.Request) -> web.WebSocketResponse:  # noqa: C901,
         elif msg.type == WSMsgType.ERROR:
             logger.error(f"WebSocket connection closed with exception: {ws.exception()}")
 
+    session_signals.unregister(ws)
     return ws

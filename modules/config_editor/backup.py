@@ -4,7 +4,7 @@ from typing import Any
 
 from . import persistence
 
-BACKUP_DIR = Path(__file__).parent.parent / "config-backups"
+BACKUP_DIR = Path(__file__).parent.parent.parent / "config-backups"
 
 
 def list_backups() -> list[dict[str, Any]]:

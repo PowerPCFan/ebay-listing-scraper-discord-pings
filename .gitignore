@@ -16,6 +16,6 @@ pickers.txt
 picker_states.json
 global_blocklist.txt
 config-backups/
-config-editor-metadata.json
+config-editor-*.json
 .codex
 agents/

@@ -3,7 +3,7 @@ from pathlib import Path
 
 from modules.config_tools import get_config_path, get_raw_config
 
-BACKUP_DIR = Path(__file__).parent.parent / "config-backups"
+BACKUP_DIR = Path(__file__).parent.parent.parent / "config-backups"
 
 def _ts_for_backupname() -> str:
     return datetime.now(tz=UTC).strftime("%Y-%m-%d_%H-%M-%S")

@@ -294,6 +294,11 @@ class Config:
     config_editor_password: str | None = None
     config_editor_host: str | None = None
     config_editor_port: int | None = None
+    config_editor_session_length: str | None = None
+    config_editor_show_extend_popup: str | None = None
+    config_editor_discord_client_id: str | None = None
+    config_editor_discord_client_secret: str | None = None
+    config_editor_discord_redirect_uri: str | None = None
     config_version: str = "1.0.0"
     changelog: list[dict[str, Any]] = field(default_factory=list)
 
@@ -333,6 +338,11 @@ class Config:
         except ValueError:
             return None
 
+    def define(self, key: str, result: dict) -> None:
+        attr = getattr(self, key)
+        if attr is not None:
+            result[key] = attr
+
     def to_dict(self) -> dict:
         result = {
             "debug_mode": self.debug_mode,
@@ -359,18 +369,23 @@ class Config:
             "changelog": self.changelog,
         }
 
-        if self.logger_webhook is not None:
-            result["logger_webhook"] = self.logger_webhook
+        for k in [
+            "logger_webhook",
+            "config_editor_password",
+            "config_editor_host",
+            "config_editor_port",
+            "config_editor_session_length",
+            "config_editor_show_extend_popup",
+            "config_editor_discord_client_id",
+            "config_editor_discord_client_secret",
+            "config_editor_discord_redirect_uri",
+        ]:
+            self.define(k, result)
+
         if self.logger_webhook_ping is not None:
             result["logger_webhook_ping"] = self.to_str(self.logger_webhook_ping)
         if self.sleep_hours is not None:
             result["sleep_hours"] = self.sleep_hours.to_dict()
-        if self.config_editor_password is not None:
-            result["config_editor_password"] = self.config_editor_password
-        if self.config_editor_host is not None:
-            result["config_editor_host"] = self.config_editor_host
-        if self.config_editor_port is not None:
-            result["config_editor_port"] = self.config_editor_port
 
         return result
 
@@ -384,7 +399,11 @@ class Config:
     @classmethod
     def from_dict(cls, data: dict) -> Self:
         data = data.copy()
+
+        data.pop("$schema", None)
         data.pop("config_editor", None)
+        data.pop("blocklist", None)
+        data.pop("global_blocklist", None)
 
         pings_data = data.pop("pings", [])
         self_roles_data = data.pop("self_roles", [])

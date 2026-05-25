@@ -27,7 +27,7 @@ class SeenItemsDB:
                     )
                 """)
                 conn.commit()
-            logger.debug(f"Database initialized at {self.db_path}")
+            logger.info(f"Seen Items database initialized at {self.db_path.relative_to(Path(__file__).parent.parent)}")  # noqa: E501
         except Exception:
             logger.exception("Failed to initialize database:")
             raise

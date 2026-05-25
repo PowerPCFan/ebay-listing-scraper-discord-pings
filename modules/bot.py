@@ -15,6 +15,7 @@ from discord.ext import commands
 
 from . import ebay_api, modes
 from . import global_vars as gv
+from .config_editor import authentication as config_editor_auth
 from .config_tools import (
     PingConfig,
     SelfRole,
@@ -24,7 +25,7 @@ from .config_tools import (
 )
 from .ebay_api import EbayItem
 from .enums import BuyingOption, ConditionEnum, DealTuple, Emojis, KeywordMode, Match
-from .logger import discordPyLevelValue, logger
+from .logger import discord_py_level_value, logger
 from .rolepicker_config_tools import RolePickerRole, RolePickerState
 from .utils import (
     build_shipping_embed_value,
@@ -231,7 +232,7 @@ class EbayScraperBot(commands.Bot):
         discord_logger.handlers = []
         for handler in logger.handlers:
             discord_logger.addHandler(handler)
-        discord_logger.setLevel(discordPyLevelValue)
+        discord_logger.setLevel(discord_py_level_value)
 
         discord.VoiceClient.warn_nacl = False
         discord.VoiceClient.warn_dave = False
@@ -274,7 +275,7 @@ class EbayScraperBot(commands.Bot):
 
         logger.info("Bot ready! Starting eBay scraper...")
 
-        logger.debug("Connecting to eBay API...")
+        logger.info("Initializing eBay API...")
         await change_status(bot=self, logger=logger, message="Connecting to eBay API...")
         initialized = await ebay_api.initialize()
 
@@ -745,7 +746,6 @@ class SelfRoleButton(discord.ui.Button):
 
 def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
     if gv.config.bot_debug_commands:
-
         @bot.tree.command(name="restart-bot", description="[WARNING: Very buggy!] Restart the bot")
         @app_commands.describe(
             method="Method to use for restarting the bot. 'replace' replaces the process and 'spawn' starts a new one and then kills the current one."
@@ -788,6 +788,40 @@ def setup_commands(bot: "EbayScraperBot") -> None:  # noqa: C901, PLR0915
                     ephemeral=True,
                 )
                 logger.error(f"Failed to restart bot via Discord /restart-bot: {e}")
+
+        @bot.tree.command(
+            name="reset-cookies",
+            description="Invalidate all config editor sessions and force everyone to log in again",
+        )
+        @commands.is_owner()
+        async def reset_cookies_command(
+            interaction: discord.Interaction, ephemeral: bool = True
+        ) -> None:
+            try:
+                session_version = config_editor_auth.reset_all_sessions()
+                embed = discord.Embed(
+                    title="Config Editor Sessions Reset",
+                    description=(
+                        "All existing config editor login sessions have been invalidated. "
+                        f"New session version: {session_version}."
+                    ),
+                    color=discord.Color.orange(),
+                    timestamp=discord.utils.utcnow(),
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+                logger.info(
+                    "Config editor sessions reset via Discord command; new session version is %s.",
+                    session_version,
+                )
+            except Exception as e:
+                embed = discord.Embed(
+                    title="Reset Cookies Failed",
+                    description=f"Error: {e!s}",
+                    color=discord.Color.red(),
+                    timestamp=discord.utils.utcnow(),
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+                logger.exception("Failed to reset config editor sessions via Discord:")
 
     @bot.tree.command(
         name="start", description="Start the eBay listing scraper (when in start_on_command mode)"
