@@ -3,8 +3,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Self, overload
 
-from modules.logger import logger
-
 from .enums import Deal, DealRanges, DealTuple, KeywordMode
 
 CONFIG_JSON_POSSIBLE = ["config.json", "config.jsonc"]
@@ -59,7 +57,6 @@ class GlobalBlocklist:
         with GLOBAL_BLOCKLIST_TXT.open("w", encoding="utf-8") as f:
             for item in self.items:
                 f.write(f"{item}\n")
-        logger.info(f"Saved global blocklist to {GLOBAL_BLOCKLIST_TXT}.")
 
     def add(self, item: str) -> bool:
         item = item.strip().lower()
@@ -398,7 +395,6 @@ class Config:
 
         with path.open("w", encoding="utf-8") as f:
             f.write(json.dumps(self.to_dict(), indent=4))
-        logger.info(f"Saved config to {path}.")
 
     @classmethod
     def from_dict(cls, data: dict) -> Self:

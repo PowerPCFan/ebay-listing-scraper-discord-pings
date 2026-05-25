@@ -134,6 +134,7 @@ def save_global_blocklist(items: list[str]) -> list[str]:
 
     gv.global_blocklist.items = normalized
     gv.global_blocklist.save()
+    logger.info("Saved global blocklist.")
     gv.global_blocklist = reload_global_blocklist()
 
     return list(gv.global_blocklist.items)
