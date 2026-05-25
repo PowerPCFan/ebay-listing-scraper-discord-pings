@@ -26,15 +26,18 @@ class CommandListener:
         self.prefix = prefix
 
         self.commands: Mapping[tuple[str, ...], Function] = {
+            ("help", "h"): self._print_help,
             ("reload", "r"): self._reload_config,
             ("resetcookies", "rc"): self._reset_cookies,
             ("restartws", "reloadws", "rws"): self._restart_web_server,
             ("quit", "qa", "q", "q!", "exit"): self._exit,
-            ("help", "h"): self._print_help,
         }
 
         if gv.config.start_on_command:
             self.commands[("start",)] = self._start_scraper
+
+        if self.is_in_tmux():
+            self.commands[("detach",)] = self._tmux_detach
 
         self.resolved_commands: Mapping[str, Function] = {
             self.prefix + key: func for keys, func in self.commands.items() for key in keys
@@ -165,3 +168,10 @@ class CommandListener:
             print(f"• {', '.join(aliases)}\n    \x1b[38;5;245m{doc}\x1b[0m\n")
 
         print("=" * term_width + "\n\n")
+
+    def is_in_tmux(self) -> bool:
+        return "TMUX" in os.environ
+
+    def _tmux_detach(self) -> None:
+        """Detaches from the current tmux session."""
+        os.system("/usr/bin/tmux detach-client")  # noqa: S605

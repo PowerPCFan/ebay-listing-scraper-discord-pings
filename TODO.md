@@ -6,3 +6,4 @@
   - no changelog for settings tab changes? whole settings tab is kinda fucked too the save dock is weirdly styled and it doesnt hide and show and the other tabs are weird too just work on the whole non-pings aspect of conf. editor
   - separate app.js into multiple files -- or try SvelteKit in SSG mode? for cleaner DOM interaction and typescript and stuff
 - per-item exclude keywords/blocklist override?
+- Independent sessions: split config editor auth from the shared config-editor-session-state.json into per-session records, and scope cookies, expiry, and websocket invalidation instead of global
