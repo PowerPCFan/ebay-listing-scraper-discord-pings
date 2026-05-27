@@ -45,6 +45,7 @@ def _ws_state_payload() -> dict[str, Any]:
         "discord_metadata": metadata.get_discord_meta(),
         "session_state": {
             "expires_at": int(expires_at * 1000),
+            "session_length_seconds": session_control.get_config_editor_session_length_seconds(),
             "warning_seconds": session_control.get_config_editor_warning_seconds(),
             "remaining_seconds": max(0, round(expires_at - time.time())),
         },

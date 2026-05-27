@@ -839,6 +839,10 @@ button.loading {
   margin-top: 8px;
 }
 
+.session-actions {
+  flex-wrap: wrap;
+}
+
 .modal .button-row {
   justify-content: flex-start;
   gap: 12px;

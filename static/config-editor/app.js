@@ -80,13 +80,44 @@
   // Session management
   let sessionExpiryTime = null;
   let sessionCheckInterval = null;
-  const SESSION_DURATION_MS = 30 * 60 * 1000;
+  let SESSION_DURATION_MS = 30 * 60 * 1000;
   let SESSION_WARNING_THRESHOLD_MS = 15 * 1000;
+
+  function formatSessionDuration(ms) {
+    const durationMs = Math.max(0, Number(ms) || 0);
+    const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.max(1, Math.round((totalSeconds % 3600) / 60));
+
+    if (typeof Intl !== "undefined" && typeof Intl.DurationFormat === "function") {
+      const formatter = new Intl.DurationFormat(undefined, {
+        style: "long",
+        hoursDisplay: "auto",
+        minutesDisplay: "auto",
+        secondsDisplay: "omit",
+      });
+
+      return formatter.format({
+        days,
+        hours,
+        minutes,
+      });
+    }
+
+    console.log("No Intl.DurationFormat support, using fallback formatting.");
+    const parts = [];
+    if (days) parts.push(`${days} day${days === 1 ? "" : "s"}`);
+    if (hours) parts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
+    if (!days && minutes) parts.push(`${minutes} minute${minutes === 1 ? "" : "s"}`);
+
+    return parts.length > 0 ? parts.join(", ") : "1 minute";
+  }
 
   const SESSION_MESSAGES = {
     expiryWarning: (seconds) =>
       `Your session will expire in ${seconds} second${seconds > 1 ? "s" : ""}.`,
-    sessionExtended: "Session extended by 30 minutes",
+    sessionExtended: (ms) => `Session extended by ${formatSessionDuration(ms)}`,
     sessionExpired: "Session expired. Please log in again.",
     extendFailed: "Failed to extend session. Please log in again.",
     extendError: "Error extending session",
@@ -97,10 +128,18 @@
   );
   const sessionExpiryTitleEl = document.getElementById("sessionExpiryTitle");
   const sessionExpiryBodyEl = document.getElementById("sessionExpiryBody");
+  const btnSessionDismiss = document.getElementById("btnSessionDismiss");
   const btnSessionExtend = document.getElementById("btnSessionExtend");
   const btnSessionLogout = document.getElementById("btnSessionLogout");
+  let sessionWarningDismissed = false;
+  let sessionWarningArmed = false;
+  let logoutInProgress = false;
 
-  function updateSessionExpiry(expiresAtMs = null, warningSeconds = null) {
+  function updateSessionExpiry(
+    expiresAtMs = null,
+    warningSeconds = null,
+    sessionLengthSeconds = null,
+  ) {
     if (sessionCheckInterval) {
       clearTimeout(sessionCheckInterval);
       sessionCheckInterval = null;
@@ -110,10 +149,20 @@
       SESSION_WARNING_THRESHOLD_MS = Math.max(0, warningSeconds * 1000);
     }
 
+    if (
+      typeof sessionLengthSeconds === "number" &&
+      Number.isFinite(sessionLengthSeconds) &&
+      sessionLengthSeconds > 0
+    ) {
+      SESSION_DURATION_MS = Math.max(1000, sessionLengthSeconds * 1000);
+    }
+
     sessionExpiryTime =
       typeof expiresAtMs === "number" && Number.isFinite(expiresAtMs)
         ? expiresAtMs
         : Date.now() + SESSION_DURATION_MS;
+    sessionWarningDismissed = false;
+    sessionWarningArmed = false;
     checkSessionExpiry();
   }
 
@@ -139,8 +188,9 @@
       return;
     }
 
-    if (timeLeft <= SESSION_WARNING_THRESHOLD_MS) {
-      // Show warning modal if not already showing
+    if (timeLeft > SESSION_WARNING_THRESHOLD_MS) {
+      sessionWarningArmed = true;
+    } else if (sessionWarningArmed && !sessionWarningDismissed) {
       if (!sessionExpiryOverlayEl.classList.contains("open")) {
         sessionExpiryOverlayEl.classList.add("open");
         sessionExpiryOverlayEl.setAttribute("aria-hidden", "false");
@@ -155,9 +205,15 @@
   }
 
   function showSessionWarning(message, expiresAtMs = null, warningSeconds = null) {
+    if (sessionWarningDismissed) {
+      return;
+    }
+
     if (typeof expiresAtMs === "number" && Number.isFinite(expiresAtMs)) {
       updateSessionExpiry(expiresAtMs, warningSeconds);
     }
+
+    sessionWarningArmed = true;
 
     if (sessionExpiryOverlayEl.classList.contains("open")) {
       return;
@@ -169,7 +225,31 @@
       message || SESSION_MESSAGES.expiryWarning(Math.max(1, Math.ceil((sessionExpiryTime - Date.now()) / 1000)));
   }
 
-  function forceSessionLogout(message) {
+  function dismissSessionWarning() {
+    sessionWarningDismissed = true;
+    if (sessionExpiryOverlayEl.classList.contains("open")) {
+      sessionExpiryOverlayEl.classList.remove("open");
+      sessionExpiryOverlayEl.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  async function logoutSession() {
+    if (logoutInProgress) return;
+    logoutInProgress = true;
+
+    try {
+      await fetch("/logout", {
+        method: "GET",
+        credentials: "same-origin",
+      });
+    } catch (err) {
+      console.warn("Logout request failed; redirecting anyway.", err);
+    } finally {
+      window.location.href = "/";
+    }
+  }
+
+  function forceSessionLogout(message, reason = null) {
     setStatus(message || SESSION_MESSAGES.sessionExpired, "error");
 
     if (sessionCheckInterval) {
@@ -183,6 +263,13 @@
 
     state = null;
     originalState = null;
+    sessionWarningDismissed = false;
+    sessionWarningArmed = false;
+
+    if (logoutInProgress && reason === "logout") {
+      return;
+    }
+
     window.location.href = "/";
   }
 
@@ -194,10 +281,18 @@
       });
 
       if (response.ok) {
+        const payload = await response.json().catch(() => ({}));
         sessionExpiryOverlayEl.classList.remove("open");
         sessionExpiryOverlayEl.setAttribute("aria-hidden", "true");
-        updateSessionExpiry();
-        setStatus(SESSION_MESSAGES.sessionExtended, "ok");
+        updateSessionExpiry(
+          payload.expires_at,
+          payload.warning_seconds,
+          payload.session_length_seconds,
+        );
+        setStatus(
+          payload.message || SESSION_MESSAGES.sessionExtended(SESSION_DURATION_MS),
+          "ok",
+        );
       } else {
         setStatus(SESSION_MESSAGES.extendFailed, "error");
         window.location.href = "/";
@@ -3089,6 +3184,7 @@
         updateSessionExpiry(
           message.session_state.expires_at,
           message.session_state.warning_seconds,
+          message.session_state.session_length_seconds,
         );
 
         if (
@@ -3096,13 +3192,15 @@
           typeof message.session_state.warning_seconds === "number" &&
           message.session_state.remaining_seconds > 0 &&
           message.session_state.remaining_seconds <=
-            message.session_state.warning_seconds &&
-          !sessionExpiryOverlayEl.classList.contains("open")
+            message.session_state.warning_seconds
         ) {
           showSessionWarning(
             SESSION_MESSAGES.expiryWarning(
               Math.max(1, Math.ceil(message.session_state.remaining_seconds)),
             ),
+            message.session_state.expires_at,
+            message.session_state.warning_seconds,
+            message.session_state.session_length_seconds,
           );
         }
       }
@@ -3248,16 +3346,26 @@
 
     if (message.type === "session_extended") {
       if (message.expires_at) {
-        updateSessionExpiry(message.expires_at, message.warning_seconds);
+        updateSessionExpiry(
+          message.expires_at,
+          message.warning_seconds,
+          message.session_length_seconds,
+        );
       }
       sessionExpiryOverlayEl.classList.remove("open");
       sessionExpiryOverlayEl.setAttribute("aria-hidden", "true");
-      setStatus(message.message || SESSION_MESSAGES.sessionExtended, "ok");
+      setStatus(
+        message.message || SESSION_MESSAGES.sessionExtended(SESSION_DURATION_MS),
+        "ok",
+      );
       return;
     }
 
     if (message.type === "session_logout") {
-      forceSessionLogout(message.message || SESSION_MESSAGES.sessionExpired);
+      forceSessionLogout(
+        message.message || SESSION_MESSAGES.sessionExpired,
+        message.reason,
+      );
       return;
     }
 
@@ -3392,8 +3500,6 @@
       items: [],
       channel_id: 0,
       role: 0,
-      price_ranges_last_updated: new Date().toISOString(),
-      exclude_keywords: [],
       blocklist_override: [],
       do_not_show: [],
       is_psu: false,
@@ -5246,15 +5352,11 @@
     if (btnSessionExtend) {
       btnSessionExtend.addEventListener("click", extendSession);
     }
+    if (btnSessionDismiss) {
+      btnSessionDismiss.addEventListener("click", dismissSessionWarning);
+    }
     if (btnSessionLogout) {
-      btnSessionLogout.addEventListener("click", () => {
-        // Immediate logout without reload
-        setStatus(SESSION_MESSAGES.sessionExpired, "error");
-        ws.close();
-        state = null;
-        originalState = null;
-        window.location.href = "/";
-      });
+      btnSessionLogout.addEventListener("click", logoutSession);
     }
 
     document.getElementById("btnSavePing").addEventListener("click", () => {

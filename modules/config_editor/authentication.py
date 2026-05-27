@@ -530,14 +530,27 @@ async def handle_extend_session(request: web.Request) -> web.Response:
     identity = _get_current_auth_identity(request)
     if identity is None:
         logger.warning("Session extension requested without a valid session.")
-        return web.Response(text="Not authenticated", status=401)
+        return web.json_response({"message": "Not authenticated"}, status=401)
+
+    session_length_seconds = session_control.get_config_editor_session_length_seconds()
 
     response = web.Response(text="Session extended")
     if identity.kind == "password":
         logger.debug("Extending password-based session.")
         _set_password_cookie(response, request)
         await session_signals.notify_session_extended()
-        return response
+        expires_at = session_control.get_session_expires_at()
+        return web.json_response(
+            {
+                "message": (
+                    f"Session extended by {session_length_seconds // 60} "
+                    f"minute{'s' if session_length_seconds // 60 != 1 else ''}."
+                ),
+                "expires_at": int(expires_at * 1000),
+                "warning_seconds": session_control.get_config_editor_warning_seconds(),
+                "session_length_seconds": session_length_seconds,
+            },
+        )
 
     if identity.kind == "discord" and identity.user_id:
         logger.debug("Extending Discord-based session for user %s.", identity.user_id)
@@ -546,19 +559,27 @@ async def handle_extend_session(request: web.Request) -> web.Response:
             logger.warning(
                 "Session extension rejected because the Discord user is no longer authorized.",
             )
-            return web.Response(text="Not authenticated", status=401)
+            return web.json_response({"message": "Not authenticated"}, status=401)
         _set_discord_cookie(response, request, identity.user_id)
         await session_signals.notify_session_extended()
-        return response
+        expires_at = session_control.get_session_expires_at()
+        return web.json_response(
+            {
+                "message": (
+                    f"Session extended by {session_length_seconds // 60} "
+                    f"minute{'s' if session_length_seconds // 60 != 1 else ''}."
+                ),
+                "expires_at": int(expires_at * 1000),
+                "warning_seconds": session_control.get_config_editor_warning_seconds(),
+                "session_length_seconds": session_length_seconds,
+            },
+        )
 
-    return web.Response(text="Not authenticated", status=401)
+    return web.json_response({"message": "Not authenticated"}, status=401)
 
 
 async def handle_logout(_request: web.Request) -> web.Response:
-    await session_signals.notify_session_logout(
-        "logout",
-        "You have been logged out.",
-    )
+    reset_all_sessions()
     response = web.HTTPFound("/")
     _clear_login_cookies(response)
     return response

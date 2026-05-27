@@ -63,7 +63,10 @@ async def _track_session(ws: web.WebSocketResponse) -> None:
         if warning_at > now:
             await asyncio.sleep(warning_at - now)
 
-        if ws.closed:
+            if ws.closed:
+                return
+
+        elif ws.closed:
             return
 
         if not await _send_warning(ws, expires_at):
