@@ -1305,7 +1305,7 @@
 
   function inferComponentTypeFromKeyword(keywordValue) {
     const normalized = String(keywordValue || "").toLowerCase();
-    if (!normalized) return "nvidia_gpu";
+    if (!normalized) return "custom";
     if (normalized.includes("ryzen")) return "amd_cpu";
     if (normalized.includes("rtx") || normalized.includes("gtx"))
       return "nvidia_gpu";
@@ -1393,6 +1393,14 @@
     const values = autoComponentState[componentType] || {};
 
     autoComponentFieldsGridEl.innerHTML = "";
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "field full";
+    const label = document.createElement("label");
+    label.textContent = "Component Type";
+    wrapper.appendChild(label);
+    wrapper.appendChild(autoComponentTypeEl);
+    autoComponentFieldsGridEl.appendChild(wrapper);
 
     function addField({
       key,
@@ -1577,6 +1585,7 @@
     componentData = null,
     manualKeyword = "",
     manualFriendlyName = "",
+    allowIncompleteData = false,
   ) {
     const values =
       componentData && typeof componentData === "object"
@@ -1595,7 +1604,7 @@
       const ryzen = String(values.ryzen || "").trim();
       const model = String(values.model || "").trim();
       const suffix = String(values.suffix || "").trim();
-      if (!ryzen || !model) {
+      if (!allowIncompleteData && (!ryzen || !model)) {
         return { error: "AMD CPU requires Ryzen series and model." };
       }
       const keyword = suffix
@@ -1614,10 +1623,10 @@
       const model = String(values.model || "").trim();
       const variant = String(values.variant || "normal");
       const vram = String(values.vram || "").trim();
-      if (!model) {
+      if (!allowIncompleteData && !model) {
         return { error: "NVIDIA GPU requires a model." };
       }
-      if (variant !== "normal" && vram) {
+      if (!allowIncompleteData && variant !== "normal" && vram) {
         return {
           error:
             "VRAM can only be used with normal NVIDIA models (non-Ti, non-SUPER).",
@@ -1654,7 +1663,7 @@
     if (componentType === "amd_gpu") {
       const model = String(values.model || "").trim();
       const variant = String(values.variant || "normal");
-      if (!model) {
+      if (!allowIncompleteData && !model) {
         return { error: "AMD GPU requires a model." };
       }
       let keyword;
@@ -1675,7 +1684,7 @@
       const capacity = String(values.capacity || "").trim();
       const ddr = String(values.ddr || "").trim();
       const speed = String(values.speed || "").trim();
-      if (!capacity || !ddr || !speed) {
+      if (!allowIncompleteData && (!capacity || !ddr || !speed)) {
         return { error: "RAM requires capacity, DDR type, and speed." };
       }
       return {
@@ -1689,13 +1698,13 @@
       const gb = String(values.gb || "").trim();
       const tb = String(values.tb || "").trim();
 
-      if (mode === "gb" && !gb) {
+      if (!allowIncompleteData && mode === "gb" && !gb) {
         return { error: "NVMe SSD (GB mode) requires a GB value." };
       }
-      if (mode === "tb" && !tb) {
+      if (!allowIncompleteData && mode === "tb" && !tb) {
         return { error: "NVMe SSD (TB mode) requires a TB value." };
       }
-      if (mode === "gb_tb" && (!gb || !tb)) {
+      if (!allowIncompleteData && mode === "gb_tb" && (!gb || !tb)) {
         return {
           error: "NVMe SSD (GB or TB mode) requires both GB and TB values.",
         };
@@ -1912,11 +1921,11 @@
     const ping = state.pings[selectedPingIndex];
     const item = ping.items[keywordIndex];
     const keywordMeta = getKeywordMeta(selectedPingIndex, keywordIndex);
-    const itemKeyword = ensureItem
+    const itemKeyword = ensureItemKeywordConfig(item);
     filterComponentTypeEl.value =
       options.force_component_type ||
       inferComponentTypeFromKeyword(itemKeyword.filter || "") ||
-      "nvidia_gpu";
+      "custom";
     const prefillType = filterComponentTypeEl.value || "nvidia_gpu";
     let prefillData = null;
     if (
@@ -2230,6 +2239,7 @@
       autoComponentState[componentType],
       "",
       "",
+      true, // allowIncompleteData for deal range generation
     );
     if (generated.error) {
       setStatus(generated.error, "error");
@@ -4530,8 +4540,6 @@
         const tooltipIcon = document.createElement("span");
         tooltipIcon.className = "tooltip-icon";
         tooltipIcon.textContent = "ⓘ";
-        tooltipIcon.setAttribute("aria-label", "Help");
-
         const tooltipTextEl = document.createElement("span");
         tooltipTextEl.className = "tooltip-text";
         tooltipTextEl.textContent = tooltipText;
@@ -4834,430 +4842,147 @@
 
       const isTyped =
         keywordMeta.mode === "typed" && !!keywordMeta.component_type;
-      if (isTyped) {
-        addKeywordSectionHeader("Component");
-        const componentType = keywordMeta.component_type;
-        if (
-          !keywordMeta.component_data ||
-          typeof keywordMeta.component_data !== "object"
-        ) {
-          keywordMeta.component_data = getDefaultComponentData(componentType);
+
+      addKeywordSectionHeader(
+        "Matching",
+        "Filter supports plaintext or regexp:: patterns. Query is only used in query mode.",
+      );
+      const basicFields =
+        itemKeyword.mode === "query"
+          ? [
+              ["enabled", "Enabled", "checkbox", "half"],
+              ["friendly_name", "Friendly Name", "text", "half"],
+              ["keyword_query", "Query", "text", "half"],
+              ["keyword_filter", "Filter", "text", "full"],
+              ["min_price", "Min Price", "number", "third"],
+              ["max_price", "Max Price", "number", "third"],
+              ["target_price", "Target Price", "number", "third"],
+            ]
+          : [
+              ["enabled", "Enabled", "checkbox", "half"],
+              ["friendly_name", "Friendly Name", "text", "half"],
+              ["keyword_filter", "Filter", "text", "half"],
+              ["min_price", "Min Price", "number", "third"],
+              ["max_price", "Max Price", "number", "third"],
+              ["target_price", "Target Price", "number", "third"],
+            ];
+
+      let priceValidationMsg = null;
+      basicFields.forEach(([key, labelText, type, cls]) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = `field ${cls}`;
+
+        const label = document.createElement("label");
+        label.textContent = labelText;
+        const labelNode =
+          key === "keyword_filter"
+            ? addLabelWithTooltip(
+                label,
+                "Use plaintext for simple contains match, or prefix with regexp:: for regex matching.",
+              )
+            : key === "keyword_query"
+              ? addLabelWithTooltip(
+                  label,
+                  "eBay search query text. Only shown and used when item mode is Query.",
+                )
+              : label;
+
+        const input = document.createElement("input");
+        input.type = type;
+        if (type === "checkbox") {
+          wrapper.classList.add("checkbox-field");
+          input.checked = !!item[key];
+        } else if (key === "keyword_filter") {
+          input.value = itemKeyword.filter ?? "";
+        } else if (key === "keyword_query") {
+          input.value = itemKeyword.query ?? "";
+          input.disabled = itemKeyword.mode !== "query";
+        } else {
+          input.value = item[key] ?? "";
         }
-        const componentData = keywordMeta.component_data;
-
-        const addTypedField = (
-          key,
-          labelText,
-          type = "text",
-          cls = "half",
-          options = null,
-          placeholder = "",
-        ) => {
-          const wrapper = document.createElement("div");
-          wrapper.className = `field ${cls}`;
-          const label = document.createElement("label");
-          label.textContent = labelText;
-          wrapper.appendChild(label);
-
-          let input;
-          if (type === "select") {
-            input = document.createElement("select");
-            options.forEach((option) => {
-              const optionEl = document.createElement("option");
-              if (typeof option === "string") {
-                optionEl.value = option;
-                optionEl.textContent = option;
-              } else {
-                optionEl.value = option.value;
-                optionEl.textContent = option.label;
-              }
-              input.appendChild(optionEl);
-            });
-          } else {
-            input = document.createElement("input");
-            input.type = type;
-            if (placeholder) input.placeholder = placeholder;
+        const validatePriceInputs = () => {
+          const msg = getItemPriceValidationMessage(item);
+          const isPriceField =
+            key === "min_price" ||
+            key === "max_price" ||
+            key === "target_price";
+          if (isPriceField) {
+            if (msg) input.classList.add("invalid");
+            else input.classList.remove("invalid");
           }
-          input.value = componentData[key] ?? "";
-          input.addEventListener("change", () => {
-            componentData[key] = input.value;
-            if (!applyTypedMetaToKeyword(item, ping, keywordMeta, true)) {
-              setStatus(
-                "Missing required typed fields. Update the missing values to continue.",
-                "warning",
-              );
-            } else {
+          priceValidationMsg = msg;
+        };
+        validatePriceInputs();
+        input.addEventListener("change", () => {
+          if (type === "checkbox") {
+            item[key] = input.checked;
+          } else if (type === "number") {
+            item[key] = input.value === "" ? null : Number(input.value);
+            const correctionMsg = autoCorrectKeywordPrices(item);
+            if (correctionMsg) {
+              setStatus(correctionMsg, "warning");
               renderKeywords(ping);
               markPingChanged();
+              return;
             }
-          });
+            validatePriceInputs();
+          } else {
+            if (key === "keyword_filter") {
+              itemKeyword.filter = input.value;
+            } else if (key === "keyword_query") {
+              itemKeyword.query = input.value === "" ? null : input.value;
+            } else {
+              item[key] = input.value === "" ? null : input.value;
+            }
+          }
+          const currentPriceError = getItemPriceValidationMessage(item);
+          if (currentPriceError) {
+            setStatus(currentPriceError, "error");
+          }
+          markPingChanged();
+        });
 
+        wrapper.appendChild(labelNode);
+        if (key === "keyword_filter") {
+          const inlineRow = document.createElement("div");
+          inlineRow.className = "field-inline-row";
+          inlineRow.appendChild(input);
+          const genBtn = document.createElement("button");
+          genBtn.type = "button";
+          genBtn.className = "tonal";
+          genBtn.textContent = "Generate";
+          genBtn.addEventListener("click", () => {
+            const targetType =
+              keywordMeta.component_type ||
+              inferComponentTypeFromKeyword(itemKeyword.filter || "");
+            openFilterGenerateModal(keywordIndex, {
+              conversion_mode: false,
+              force_component_type:
+                targetType && targetType !== "custom"
+                  ? targetType
+                  : "nvidia_gpu",
+              prefill_component_data: reverseParseComponentData(
+                item,
+                targetType && targetType !== "custom"
+                  ? targetType
+                  : "nvidia_gpu",
+              ),
+            });
+            setStatus("Filter generator opened.", "ok");
+          });
+          inlineRow.appendChild(genBtn);
+          wrapper.appendChild(inlineRow);
+        } else {
           wrapper.appendChild(input);
-          grid.appendChild(wrapper);
-        };
-
-        if (componentType === "nvidia_gpu") {
-          addTypedField("brand", "GPU Brand", "select", "third", [
-            "RTX",
-            "GTX",
-          ]);
-          addTypedField("model", "Model", "text", "third", null, "e.g., 5070");
-          addTypedField("variant", "Variant", "select", "third", [
-            { value: "normal", label: "Normal" },
-            { value: "ti", label: "Ti" },
-            { value: "super", label: "SUPER" },
-            { value: "ti_super", label: "Ti SUPER" },
-          ]);
-          if (componentData.variant === "normal") {
-            addTypedField(
-              "vram",
-              "VRAM (Optional)",
-              "number",
-              "third",
-              null,
-              "e.g., 12",
-            );
-          }
-        } else if (componentType === "amd_gpu") {
-          addTypedField("model", "Model", "text", "half", null, "e.g., 9070");
-          addTypedField("variant", "Variant", "select", "half", [
-            { value: "normal", label: "Normal" },
-            { value: "xt", label: "XT" },
-            { value: "xtx", label: "XTX" },
-          ]);
-        } else if (componentType === "amd_cpu") {
-          addTypedField("ryzen", "Ryzen Series", "select", "third", [
-            "3",
-            "5",
-            "7",
-            "9",
-          ]);
-          addTypedField("model", "Model", "text", "third", null, "e.g., 7800");
-          addTypedField(
-            "suffix",
-            "Suffix (Optional)",
-            "text",
-            "third",
-            null,
-            "e.g., X3D",
-          );
-        } else if (componentType === "ram") {
-          addTypedField("capacity", "Capacity (GB)", "number", "third");
-          addTypedField("ddr", "DDR Type", "text", "third", null, "DDR5");
-          addTypedField("speed", "Speed (MHz)", "number", "third");
-        } else if (componentType === "nvme_ssd") {
-          addTypedField("capacity_mode", "Capacity Mode", "select", "third", [
-            { value: "gb", label: "GB only" },
-            { value: "tb", label: "TB only" },
-            { value: "gb_tb", label: "GB or TB" },
-          ]);
-          if (
-            componentData.capacity_mode === "gb" ||
-            componentData.capacity_mode === "gb_tb"
-          ) {
-            addTypedField(
-              "gb",
-              "GB Value / Regex",
-              "text",
-              "third",
-              null,
-              "e.g., 512",
-            );
-          }
-          if (
-            componentData.capacity_mode === "tb" ||
-            componentData.capacity_mode === "gb_tb"
-          ) {
-            addTypedField(
-              "tb",
-              "TB Value / Regex",
-              "text",
-              "third",
-              null,
-              "e.g., 1",
-            );
-          }
         }
-
-        addKeywordSectionHeader(
-          "Matching",
-          "Filter supports plaintext or regexp:: patterns. Query is only used in query mode.",
-        );
-        const basicFields =
-          itemKeyword.mode === "query"
-            ? [
-                ["enabled", "Enabled", "checkbox", "half"],
-                ["friendly_name", "Friendly Name", "text", "half"],
-                ["keyword_query", "Query", "text", "half"],
-                ["keyword_filter", "Filter", "text", "full"],
-                ["min_price", "Min Price", "number", "third"],
-                ["max_price", "Max Price", "number", "third"],
-                ["target_price", "Target Price", "number", "third"],
-              ]
-            : [
-                ["enabled", "Enabled", "checkbox", "half"],
-                ["friendly_name", "Friendly Name", "text", "half"],
-                ["keyword_filter", "Filter", "text", "half"],
-                ["min_price", "Min Price", "number", "third"],
-                ["max_price", "Max Price", "number", "third"],
-                ["target_price", "Target Price", "number", "third"],
-              ];
-        let priceValidationMsg = null;
-        basicFields.forEach(([key, labelText, type, cls]) => {
-          const wrapper = document.createElement("div");
-          wrapper.className = `field ${cls}`;
-          const label = document.createElement("label");
-          label.textContent = labelText;
-          const labelNode =
-            key === "keyword_filter"
-              ? addLabelWithTooltip(
-                  label,
-                  "Use plaintext for simple contains match, or prefix with regexp:: for regex matching.",
-                )
-              : key === "keyword_query"
-                ? addLabelWithTooltip(
-                    label,
-                    "eBay search query text. Only shown and used when item mode is Query.",
-                  )
-                : label;
-          const input = document.createElement("input");
-          input.type = type;
-          if (type === "checkbox") {
-            wrapper.classList.add("checkbox-field");
-            input.checked = !!item[key];
-          } else if (key === "keyword_filter") {
-            input.value = itemKeyword.filter ?? "";
-          } else if (key === "keyword_query") {
-            input.value = itemKeyword.query ?? "";
-            input.disabled = itemKeyword.mode !== "query";
-          } else {
-            input.value = item[key] ?? "";
-          }
-          const validatePriceInputs = () => {
-            const msg = getItemPriceValidationMessage(item);
-            const isPriceField =
-              key === "min_price" ||
-              key === "max_price" ||
-              key === "target_price";
-            if (isPriceField) {
-              if (msg) input.classList.add("invalid");
-              else input.classList.remove("invalid");
-            }
-            priceValidationMsg = msg;
-          };
-          validatePriceInputs();
-          input.addEventListener("change", () => {
-            if (type === "checkbox") {
-              item[key] = input.checked;
-            } else if (type === "number") {
-              item[key] = input.value === "" ? null : Number(input.value);
-              const correctionMsg = autoCorrectKeywordPrices(item);
-              if (correctionMsg) {
-                setStatus(correctionMsg, "warning");
-                renderKeywords(ping);
-                markPingChanged();
-                return;
-              }
-              validatePriceInputs();
-            } else {
-              if (key === "keyword_filter") {
-                itemKeyword.filter = input.value;
-              } else if (key === "keyword_query") {
-                itemKeyword.query = input.value === "" ? null : input.value;
-              } else {
-                item[key] = input.value === "" ? null : input.value;
-              }
-            }
-            const currentPriceError = getItemPriceValidationMessage(item);
-            if (currentPriceError) {
-              setStatus(currentPriceError, "error");
-            }
-            markPingChanged();
-          });
-          wrapper.appendChild(labelNode);
-          if (key === "keyword_filter") {
-            const inlineRow = document.createElement("div");
-            inlineRow.className = "field-inline-row";
-            inlineRow.appendChild(input);
-            const genBtn = document.createElement("button");
-            genBtn.type = "button";
-            genBtn.className = "tonal";
-            genBtn.textContent = "Generate";
-            genBtn.addEventListener("click", () => {
-              const targetType =
-                keywordMeta.component_type ||
-                inferComponentTypeFromKeyword(itemKeyword.filter || "");
-              openFilterGenerateModal(keywordIndex, {
-                conversion_mode: false,
-                force_component_type:
-                  targetType && targetType !== "custom"
-                    ? targetType
-                    : "nvidia_gpu",
-                prefill_component_data: reverseParseComponentData(
-                  item,
-                  targetType && targetType !== "custom"
-                    ? targetType
-                    : "nvidia_gpu",
-                ),
-              });
-              setStatus("Filter generator opened.", "ok");
-            });
-            inlineRow.appendChild(genBtn);
-            wrapper.appendChild(inlineRow);
-          } else {
-            wrapper.appendChild(input);
-          }
-          grid.appendChild(wrapper);
-        });
-        if (priceValidationMsg) {
-          const warn = document.createElement("p");
-          warn.className = "hint";
-          warn.style.color = "var(--danger)";
-          warn.textContent = priceValidationMsg;
-          grid.appendChild(warn);
-        }
-      } else {
-        addKeywordSectionHeader(
-          "Matching",
-          "Filter supports plaintext or regexp:: patterns. Query is only used in query mode.",
-        );
-        const basicFields =
-          itemKeyword.mode === "query"
-            ? [
-                ["enabled", "Enabled", "checkbox", "half"],
-                ["friendly_name", "Friendly Name", "text", "half"],
-                ["keyword_query", "Query", "text", "half"],
-                ["keyword_filter", "Filter", "text", "full"],
-                ["min_price", "Min Price", "number", "third"],
-                ["max_price", "Max Price", "number", "third"],
-                ["target_price", "Target Price", "number", "third"],
-              ]
-            : [
-                ["enabled", "Enabled", "checkbox", "half"],
-                ["friendly_name", "Friendly Name", "text", "half"],
-                ["keyword_filter", "Filter", "text", "half"],
-                ["min_price", "Min Price", "number", "third"],
-                ["max_price", "Max Price", "number", "third"],
-                ["target_price", "Target Price", "number", "third"],
-              ];
-
-        let priceValidationMsg = null;
-        basicFields.forEach(([key, labelText, type, cls]) => {
-          const wrapper = document.createElement("div");
-          wrapper.className = `field ${cls}`;
-
-          const label = document.createElement("label");
-          label.textContent = labelText;
-          const labelNode =
-            key === "keyword_filter"
-              ? addLabelWithTooltip(
-                  label,
-                  "Use plaintext for simple contains match, or prefix with regexp:: for regex matching.",
-                )
-              : key === "keyword_query"
-                ? addLabelWithTooltip(
-                    label,
-                    "eBay search query text. Only shown and used when item mode is Query.",
-                  )
-                : label;
-
-          const input = document.createElement("input");
-          input.type = type;
-          if (type === "checkbox") {
-            wrapper.classList.add("checkbox-field");
-            input.checked = !!item[key];
-          } else if (key === "keyword_filter") {
-            input.value = itemKeyword.filter ?? "";
-          } else if (key === "keyword_query") {
-            input.value = itemKeyword.query ?? "";
-            input.disabled = itemKeyword.mode !== "query";
-          } else {
-            input.value = item[key] ?? "";
-          }
-          const validatePriceInputs = () => {
-            const msg = getItemPriceValidationMessage(item);
-            const isPriceField =
-              key === "min_price" ||
-              key === "max_price" ||
-              key === "target_price";
-            if (isPriceField) {
-              if (msg) input.classList.add("invalid");
-              else input.classList.remove("invalid");
-            }
-            priceValidationMsg = msg;
-          };
-          validatePriceInputs();
-          input.addEventListener("change", () => {
-            if (type === "checkbox") {
-              item[key] = input.checked;
-            } else if (type === "number") {
-              item[key] = input.value === "" ? null : Number(input.value);
-              const correctionMsg = autoCorrectKeywordPrices(item);
-              if (correctionMsg) {
-                setStatus(correctionMsg, "warning");
-                renderKeywords(ping);
-                markPingChanged();
-                return;
-              }
-              validatePriceInputs();
-            } else {
-              if (key === "keyword_filter") {
-                itemKeyword.filter = input.value;
-              } else if (key === "keyword_query") {
-                itemKeyword.query = input.value === "" ? null : input.value;
-              } else {
-                item[key] = input.value === "" ? null : input.value;
-              }
-            }
-            const currentPriceError = getItemPriceValidationMessage(item);
-            if (currentPriceError) {
-              setStatus(currentPriceError, "error");
-            }
-            markPingChanged();
-          });
-
-          wrapper.appendChild(labelNode);
-          if (key === "keyword_filter") {
-            const inlineRow = document.createElement("div");
-            inlineRow.className = "field-inline-row";
-            inlineRow.appendChild(input);
-            const genBtn = document.createElement("button");
-            genBtn.type = "button";
-            genBtn.className = "tonal";
-            genBtn.textContent = "Generate";
-            genBtn.addEventListener("click", () => {
-              const targetType =
-                keywordMeta.component_type ||
-                inferComponentTypeFromKeyword(itemKeyword.filter || "");
-              openFilterGenerateModal(keywordIndex, {
-                conversion_mode: false,
-                force_component_type:
-                  targetType && targetType !== "custom"
-                    ? targetType
-                    : "nvidia_gpu",
-                prefill_component_data: reverseParseComponentData(
-                  item,
-                  targetType && targetType !== "custom"
-                    ? targetType
-                    : "nvidia_gpu",
-                ),
-              });
-              setStatus("Filter generator opened.", "ok");
-            });
-            inlineRow.appendChild(genBtn);
-            wrapper.appendChild(inlineRow);
-          } else {
-            wrapper.appendChild(input);
-          }
-          grid.appendChild(wrapper);
-        });
-        if (priceValidationMsg) {
-          const warn = document.createElement("p");
-          warn.className = "hint";
-          warn.style.color = "var(--danger)";
-          warn.textContent = priceValidationMsg;
-          grid.appendChild(warn);
-        }
+        grid.appendChild(wrapper);
+      });
+      if (priceValidationMsg) {
+        const warn = document.createElement("p");
+        warn.className = "hint";
+        warn.style.color = "var(--danger)";
+        warn.textContent = priceValidationMsg;
+        grid.appendChild(warn);
       }
 
       addKeywordSectionHeader(
@@ -5305,7 +5030,9 @@
             targetType && targetType !== "custom" ? targetType : "nvidia_gpu",
           prefill_component_data: reverseParseComponentData(
             item,
-            targetType && targetType !== "custom" ? targetType : "nvidia_gpu",
+            targetType && targetType !== "custom"
+              ? targetType
+              : "nvidia_gpu",
           ),
         });
         setStatus("Deal-ranges assist opened.", "ok");

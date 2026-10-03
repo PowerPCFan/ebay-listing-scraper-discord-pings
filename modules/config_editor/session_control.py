@@ -1,11 +1,10 @@
 import json
 import math
+import re as regexp
 import time
 from datetime import timedelta
 from pathlib import Path
 from typing import NamedTuple, Self
-
-import isodate
 
 from modules import global_vars as gv
 from modules.logger import logger
@@ -23,14 +22,53 @@ def get_compat(data: dict, key: str) -> int | float | None:
     return res if isinstance(res, (int, float)) else None
 
 
+UNIT_MAP: dict[str, tuple[str, int]] = {}
+
+for abbr in ["s", "sec", "secs", "second", "seconds"]:
+    UNIT_MAP[abbr] = ("seconds", 1)
+for abbr in ["m", "min", "mins", "minute", "minutes"]:
+    UNIT_MAP[abbr] = ("minutes", 1)
+for abbr in ["h", "hr", "hrs", "hour", "hours"]:
+    UNIT_MAP[abbr] = ("hours", 1)
+for abbr in ["d", "day", "days"]:
+    UNIT_MAP[abbr] = ("days", 1)
+for abbr in ["w", "week", "weeks"]:
+    UNIT_MAP[abbr] = ("weeks", 1)
+for abbr in ["month", "months"]:
+    UNIT_MAP[abbr] = ("days", 30)
+for abbr in ["year", "years"]:
+    UNIT_MAP[abbr] = ("days", 365)
+
+
+def parse_duration(text: str) -> timedelta:
+    text = str(text).strip().lower()
+    m = regexp.fullmatch(r"([a-z]+|\d+(?:\.\d+)?)\s+([a-z]+)", text)
+
+    if not m:
+        msg = f"Invalid duration: {text!r}"
+        raise ValueError(msg)
+
+    amount_str, unit = m.groups()
+    amount = float(amount_str)
+
+    if unit not in UNIT_MAP:
+        msg_0 = f"Unknown unit: {unit}"
+        raise ValueError(msg_0)
+
+    td_unit, multiplier = UNIT_MAP[unit]
+
+    return timedelta(**{td_unit: amount * multiplier})
+
+
 def _parse_iso8601_duration_seconds(value: str) -> int | None:
     text = value.strip()
     if not text:
         return None
 
     try:
-        duration = isodate.parse_duration(text, as_timedelta_if_possible=True)
+        duration = parse_duration(text)
     except Exception:
+        logger.exception(f"Failed to parse duration '{text}':")
         return None
 
     if isinstance(duration, timedelta):
